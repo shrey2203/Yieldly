@@ -1,0 +1,110 @@
+/* Warm Cream Background */
+.reports-dark-container {
+    background: #fdfaf5; /* Clean Cream/Off-white */
+    min-height: 100vh;
+    padding: 60px 20px;
+    display: flex;
+    justify-content: center;
+    font-family: 'Inter', sans-serif;
+}
+
+.reports-content {
+    text-align: center; /* Ensures header is centered */
+    max-width: 2000px; 
+    width: 98%; /* Optional: ensures it stays responsive on smaller screens */
+    margin: 0 auto;
+}
+
+/* Darker text for visibility against Cream */
+.main-title-glass {
+    font-size: 38px;
+    font-weight: 800;
+    color: #1a202c; /* Deep Charcoal/Blue-Black */
+    margin-bottom: 8px;
+}
+
+.subtitle-glass {
+    color: #718096; /* Grey-blue */
+    font-size: 16px;
+    margin-bottom: 40px;
+}
+
+/* The Box: Solid Dark Blue instead of Glass */
+.grid-card-glass {
+    background: #0b1426; /* Deep Navy Blue */
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15); /* Softer shadow for light bg */
+    border: 1px solid #e2e8f0;
+    width: 100%;
+}
+
+.grid-header-dark {
+    padding: 18px 24px;
+    background: #152238; /* Slightly lighter navy for header */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.grid-header-dark h3 {
+    margin: 0;
+    font-size: 15px;
+    color: #ffffff; /* White text for contrast inside the box */
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.dot {
+    height: 8px;
+    width: 8px;
+    background-color: #3b82f6;
+    border-radius: 50%;
+    box-shadow: 0 0 10px #3b82f6;
+}
+
+.footer-note {
+    text-align: center;
+    color: #a0aec0;
+    font-size: 13px;
+    margin-top: 25px;
+}
+
+
+.grid-dispatch-btn {
+    background-color: #27ae60;
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    
+    /* Ensure no margins are interfering */
+    margin: 0; 
+    display: inline-flex;
+    align-items: center;
+    line-height: 1; /* Prevents text height from pushing button down */
+}
+
+.grid-email-input {
+    border: 1px solid #ddd;
+    background: #fff;
+    color: #333;
+    font-size: 13px;
+    outline: none;
+    transition: border 0.2s;
+}
+
+.grid-email-input:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 3px rgba(0,123,255,0.5);
+}
+
+.grid-dispatch-btn:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}

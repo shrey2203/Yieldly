@@ -1,0 +1,336 @@
+/* --- Global Reset & Fonts --- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --groww-green: #00d09c;
+  --groww-dark-green: #00b386;
+  --yieldly-mint: #f0fdfa; /* Matches the branding better than grey */
+  --text-dark: #1e293b;
+  --text-muted: #64748b;
+  --bg-base: #fcfcfd;
+  --border-color: #e2e8f0;
+  --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body, html {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-base);
+}
+
+/* --- Animated Background Container --- */
+.login-container {
+  position: relative;
+  background-color: var(--bg-base);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden; 
+  padding: 20px;
+}
+
+/* --- Animated Blobs (Updated to match Logo Colors) --- */
+.login-container::before,
+.login-container::after {
+  content: "";
+  position: absolute;
+  width: 700px;
+  height: 700px;
+  border-radius: 50%;
+  filter: blur(100px); /* Increased blur for a smoother feel */
+  z-index: 0;
+  opacity: 0.25; /* Subtle enough to not be "too blue" */
+  animation: move-blobs 25s infinite alternate-reverse;
+}
+
+.login-container::before {
+  top: -150px;
+  left: -150px;
+  /* Top blob uses the main Groww Green */
+  background: radial-gradient(circle, var(--groww-green) 0%, rgba(255, 255, 255, 0) 70%);
+}
+
+.login-container::after {
+  bottom: -200px;
+  right: -150px;
+  /* Bottom blob uses the darker logo gradient color */
+  background: radial-gradient(circle, var(--groww-dark-green) 0%, rgba(255, 255, 255, 0) 70%);
+  animation-duration: 30s;
+}
+
+/* --- The Main Card Wrapper --- */
+.login-wrapper {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  width: 100%;
+  max-width: 950px;
+  min-height: 600px;
+  background: #ffffff;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--border-color);
+  animation: card-entry 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --- Left Branding Panel (Updated Background) --- */
+.login-aside {
+  flex: 1;
+  background-color: var(--yieldly-mint); /* Changed from grey to soft mint */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 60px;
+  border-right: 1px solid var(--border-color);
+}
+
+.aside-content h1 {
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  line-height: 1.1;
+  margin: 0;
+}
+
+.aside-content .highlight {
+  color: var(--groww-green);
+  display: block;
+}
+
+.aside-content p {
+  color: var(--text-muted);
+  margin-top: 25px;
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+/* --- Right Form Panel --- */
+.login-box {
+  flex: 0.9;
+  padding: 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: #ffffff;
+}
+
+/* Float Animation for Logo */
+.login-logo {
+  animation: float 3s ease-in-out infinite;
+  filter: drop-shadow(0 10px 15px rgba(0, 208, 156, 0.2));
+  margin-bottom: 25px;
+}
+
+.login-box h2 {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+  color: var(--text-dark);
+}
+
+.subtext {
+  color: var(--text-muted);
+  font-size: 15px;
+  margin-bottom: 35px;
+}
+
+/* --- Form Fields --- */
+.form-group {
+  margin-bottom: 25px;
+  text-align: left;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  display: block;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 15px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  font-size: 16px;
+  background-color: #ffffff;
+  transition: all 0.3s ease;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--groww-green);
+  box-shadow: 0 0 0 4px rgba(0, 208, 156, 0.1);
+  transform: translateY(-1px);
+}
+
+/* --- Main Button --- */
+.login-button {
+  width: 100%;
+  padding: 16px;
+  background-color: var(--groww-green);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 10px;
+}
+
+.login-button:hover {
+  background-color: var(--groww-dark-green);
+  box-shadow: 0 8px 20px -6px rgba(0, 208, 156, 0.4);
+  transform: translateY(-2px);
+}
+
+/* --- Animations --- */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes spin { 
+  to { transform: rotate(360deg); } 
+}
+
+@keyframes card-entry {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes move-blobs {
+  0% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(60px, 120px) scale(1.1); }
+  66% { transform: translate(-40px, 60px) scale(0.9); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+/* --- Responsive (Mobile) --- */
+@media (max-width: 850px) {
+  .login-aside {
+    display: none;
+  }
+  .login-wrapper {
+    max-width: 420px;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+  }
+  .login-container {
+    background-color: #ffffff;
+  }
+  .login-container::before, .login-container::after {
+    display: none;
+  }
+  .login-box {
+    padding: 20px;
+  }
+}
+
+/* --- Processing Overlay --- */
+/* .processing-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.4s ease;
+} */
+
+/* The Animated Logo Circle */
+.yi-loader-circle {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.yi-logo-inner {
+  font-weight: 800;
+  font-size: 24px;
+  color: var(--groww-green);
+  z-index: 2;
+}
+
+.orbit {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 3px solid var(--groww-light-green);
+  border-top: 3px solid var(--groww-green);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Text Animations */
+.processing-text {
+  font-size: 20px;
+  color: var(--text-dark);
+  margin: 0;
+  font-weight: 700;
+}
+
+.processing-subtext {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+/* Soft blur for the background card when loading */
+.blur-out {
+  filter: blur(5px);
+  pointer-events: none;
+  transform: scale(0.98);
+  transition: all 0.4s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.blur-out {
+  filter: blur(8px) grayscale(20%); /* Stronger visual cue */
+  transition: filter 0.5s ease;
+}
+
+.processing-overlay {
+  position: fixed; /* Changed to fixed to cover the entire viewport */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  z-index: 9999; /* Highest priority */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: fadeInOverlay 0.3s forwards;
+}

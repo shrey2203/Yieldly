@@ -1,0 +1,34 @@
+/* 1. The CRT Flicker Animation */
+@keyframes crt-flicker {
+    0% { opacity: 0.97; }
+    5% { opacity: 0.92; }
+    10% { opacity: 0.97; }
+    100% { opacity: 1; }
+  }
+  
+  /* 2. The Matrix Class */
+  .matrix-mode {
+    /* Apply the flicker */
+    animation: crt-flicker 0.15s infinite;
+  }
+  
+  /* 3. The Digital Glow (Crucial for the Matrix look) */
+  .matrix-mode .ag-root-wrapper {
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.2); /* Outer glow */
+    border: 1px solid #003b00;
+  }
+  
+  .matrix-mode .ag-cell, 
+  .matrix-mode .ag-header-cell-text {
+    /* Makes the text glow like an old terminal */
+    text-shadow: 0 0 4px rgba(0, 255, 65, 0.6); 
+  }
+  
+  /* 4. Custom Scrollbar for Matrix Mode */
+  .matrix-mode ::-webkit-scrollbar-thumb {
+    background: #008f11 !important;
+    border-radius: 0 !important;
+  }
+  .matrix-mode ::-webkit-scrollbar-track {
+    background: #000 !important;
+  }
