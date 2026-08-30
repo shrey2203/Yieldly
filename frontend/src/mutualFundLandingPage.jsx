@@ -2,7 +2,7 @@ import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from "recharts";
 import { AgGridReact } from "ag-grid-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { AllCommunityModule, ModuleRegistry } from "ag-grid-community";
 import "./mutualFund.css";
 
@@ -35,6 +35,18 @@ const MutualFund = () => {
     const [endDate, setEndDate] = useState("");
     const [modalOpen, setModalOpen] = useState(false);
     const [selectedFund, setSelectedFund] = useState(null);
+
+    // Close modal on Escape key press
+    useEffect(() => {
+        const handleKeyDown = (event) => {
+            if (event.key === "Escape" || event.key === "Esc" || event.keyCode === 27) {
+                setModalOpen(false);
+                setShowColPicker(false);
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, []);
 
     // --- HELPER: Indian Number Formatting ---
     const formatINR = (number) => {
@@ -120,29 +132,113 @@ const MutualFund = () => {
         }));
     };
 
-    // --- AG GRID DEFINITIONS ---
+    // --- MASTER AG GRID COLUMN DEFINITIONS ---
+    const ALL_MF_COLUMNS = useMemo(() => [
+        { id: "name", headerName: "Fund Name", field: "name", flex: 2, minWidth: 200, sortable: true, filter: true, defaultVisible: true },
+        { id: "mutualFundNAV", headerName: "NAV", field: "mutualFundNAV", flex: 1, minWidth: 95, sortable: true, valueFormatter: p => (p.value ? Number(p.value).toFixed(2) : ""), defaultVisible: true },
+        { id: "averageNav", headerName: "Avg NAV", field: "averageNav", flex: 1, minWidth: 95, sortable: true, valueFormatter: p => (p.value ? Number(p.value).toFixed(2) : ""), defaultVisible: false },
+        { id: "totalUnits", headerName: "Total Units", field: "totalUnits", flex: 1, minWidth: 105, sortable: true, valueFormatter: p => (p.value ? Number(p.value).toFixed(3) : ""), defaultVisible: false },
+        { id: "totalInvestment", headerName: "Invested", field: "totalInvestment", flex: 1, minWidth: 115, valueFormatter: p => formatCurrency(p.value), defaultVisible: true },
+        { id: "totalCurrentValue", headerName: "Current", field: "totalCurrentValue", flex: 1, minWidth: 115, valueFormatter: p => formatCurrency(p.value), defaultVisible: true },
+        { id: "profitLoss", headerName: "Profit / Loss", field: "profitLoss", flex: 1, minWidth: 115, sortable: true, valueFormatter: p => p.value?.toFixed(2), cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }), defaultVisible: true },
+        { id: "absPNLPercentage", headerName: "Abs PNL%", field: "absPNLPercentage", flex: 1, minWidth: 95, sortable: true, valueFormatter: p => p.value != null ? `${Number(p.value).toFixed(2)}%` : "", cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }), defaultVisible: false },
+        { id: "cagr", headerName: "CAGR", field: "cagr", flex: 1, minWidth: 95, sortable: true, valueFormatter: p => p.value != null ? `${Number(p.value).toFixed(2)}%` : "", cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }), defaultVisible: false },
+        { id: "xirr", headerName: "XIRR", field: "xirr", flex: 1, minWidth: 95, sortable: true, valueFormatter: p => p.value != null ? `${Number(p.value).toFixed(2)}%` : "", defaultVisible: true },
+        { id: "PNL1D", headerName: "DTD", field: "PNL1D", flex: 1, minWidth: 95, sortable: true, valueFormatter: p => p.value?.toFixed(2), cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }), defaultVisible: true },
+        { id: "dtdPct", headerName: "DTD%", colId: "dtdPct", flex: 1, minWidth: 95, sortable: true, sort: "desc", valueGetter: p => (p.data.PNL1D && p.data.totalCurrentValue) ? (p.data.PNL1D / (p.data.totalCurrentValue - p.data.PNL1D)) * 100 : 0, valueFormatter: p => `${p.value.toFixed(2)}%`, cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }), defaultVisible: true },
+        { id: "PNL1M", headerName: "MTD", field: "PNL1M", flex: 1, minWidth: 95, sortable: true, valueFormatter: p => p.value?.toFixed(2), cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }), defaultVisible: false },
+        { id: "PNL1Y", headerName: "YTD", field: "PNL1Y", flex: 1, minWidth: 95, sortable: true, valueFormatter: p => p.value?.toFixed(2), cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }), defaultVisible: true },
+        { id: "ltcg", headerName: "LTCG", field: "ltcg", flex: 1, minWidth: 100, sortable: true, valueFormatter: p => p.value?.toFixed(2), cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }), defaultVisible: false },
+        { id: "stcg", headerName: "STCG", field: "stcg", flex: 1, minWidth: 100, sortable: true, valueFormatter: p => p.value?.toFixed(2), cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }), defaultVisible: false }
+    ], []);
+
+    // Column visibility preferences
+    const [visibleCols, setVisibleCols] = useState(() => {
+        const saved = localStorage.getItem("mf_visible_columns");
+        if (saved) {
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                console.error("Error parsing saved columns", e);
+            }
+        }
+        return {
+            name: true,
+            mutualFundNAV: true,
+            averageNav: false,
+            totalUnits: false,
+            totalInvestment: true,
+            totalCurrentValue: true,
+            profitLoss: true,
+            absPNLPercentage: false,
+            cagr: false,
+            xirr: true,
+            PNL1D: true,
+            dtdPct: true,
+            PNL1M: false,
+            PNL1Y: true,
+            ltcg: false,
+            stcg: false
+        };
+    });
+
+    const [showColPicker, setShowColPicker] = useState(false);
+    const [colSearchQuery, setColSearchQuery] = useState("");
+    const [quickFilterText, setQuickFilterText] = useState("");
+    const colPickerRef = useRef(null);
+
+    // Toggle single column
+    const toggleColumn = (colId) => {
+        setVisibleCols(prev => {
+            const updated = { ...prev, [colId]: !prev[colId] };
+            localStorage.setItem("mf_visible_columns", JSON.stringify(updated));
+            return updated;
+        });
+    };
+
+    // Bulk selection helpers
+    const selectAllColumns = () => {
+        const all = {};
+        ALL_MF_COLUMNS.forEach(col => { all[col.id] = true; });
+        setVisibleCols(all);
+        localStorage.setItem("mf_visible_columns", JSON.stringify(all));
+    };
+
+    const deselectAllColumns = () => {
+        const none = { name: true }; // Keep Fund Name
+        ALL_MF_COLUMNS.forEach(col => { if (col.id !== "name") none[col.id] = false; });
+        setVisibleCols(none);
+        localStorage.setItem("mf_visible_columns", JSON.stringify(none));
+    };
+
+    const resetDefaultColumns = () => {
+        const defaults = {};
+        ALL_MF_COLUMNS.forEach(col => { defaults[col.id] = col.defaultVisible; });
+        setVisibleCols(defaults);
+        localStorage.setItem("mf_visible_columns", JSON.stringify(defaults));
+    };
+
+    // Close column picker on outside click
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (colPickerRef.current && !colPickerRef.current.contains(e.target)) {
+                setShowColPicker(false);
+            }
+        };
+        if (showColPicker) {
+            document.addEventListener("mousedown", handleClickOutside);
+        }
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [showColPicker]);
+
+    // Active column definitions filtered by visibleCols
+    const columnDefs = useMemo(() => {
+        return ALL_MF_COLUMNS.filter(col => visibleCols[col.id]);
+    }, [ALL_MF_COLUMNS, visibleCols]);
+
     const defaultColDef = useMemo(() => ({
         sortable: true, filter: true, resizable: true, flex: 1
     }), []);
-
-    const columnDefs = [
-        { headerName: "Fund Name", field: "name", flex: 2, sortable: true, filter: true },
-        { headerName: "NAV", field: "mutualFundNAV", flex: 1, sortable: true, valueFormatter: p => (p.value ? Number(p.value).toFixed(2) : "") },
-        // { headerName: "Average NAV", field: "averageNav", flex: 1, sortable: true, valueFormatter: p => (p.value ? Number(p.value).toFixed(2) : "") },
-        // { headerName: "Total Units", field: "totalUnits", flex: 1, sortable: true, valueFormatter: p => (p.value ? Number(p.value).toFixed(2) : "") },
-        { headerName: "Invested", field: "totalInvestment", valueFormatter: p => formatCurrency(p.value)},
-        { headerName: "Current", field: "totalCurrentValue", valueFormatter: p => formatCurrency(p.value)},
-        { headerName: "Profit / Loss", field: "profitLoss", flex: 1, sortable: true, valueFormatter: p => p.value?.toFixed(2), cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }) },
-        // { headerName: "Abs PNL%", field: "absPNLPercentage", flex: 1, sortable: true, valueFormatter: p => p.value != null ? `${Number(p.value).toFixed(2)}%` : "" },
-        // { headerName: "CAGR", field: "cagr", flex: 1, sortable: true, valueFormatter: p => p.value != null ? `${Number(p.value).toFixed(2)}%` : "" },
-        { headerName: "XIRR", field: "xirr", flex: 1, sortable: true, valueFormatter: p => p.value != null ? `${Number(p.value).toFixed(2)}%` : "" },
-        { headerName: "DTD", field: "PNL1D", flex: 1, sortable: true, valueFormatter: p => p.value?.toFixed(2), cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }) },
-        { headerName: "DTD%", flex: 1, sortable: true, sort: "desc", valueGetter: p => (p.data.PNL1D && p.data.totalCurrentValue) ? (p.data.PNL1D / (p.data.totalCurrentValue - p.data.PNL1D)) * 100 : 0, valueFormatter: p => `${p.value.toFixed(2)}%`, cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }) },
-        // { headerName: "MTD", field: "PNL1M", flex: 1, sortable: true, valueFormatter: p => p.value?.toFixed(2), cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }) },
-        { headerName: "YTD", field: "PNL1Y", flex: 1, sortable: true, valueFormatter: p => p.value?.toFixed(2), cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }) }
-        // { headerName: "LTCG", field: "ltcg", flex: 1, sortable: true, valueFormatter: p => p.value?.toFixed(2), cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }) },
-        // { headerName: "STCG", field: "stcg", flex: 1, sortable: true, valueFormatter: p => p.value?.toFixed(2), cellStyle: p => ({ color: p.value < 0 ? "red" : "green", fontWeight: "bold" }) }
-    ];
 
     const investmentColDefs = [
         { headerName: "Date", field: "transactDate", flex: 1, sort: "desc", valueFormatter: p => p.value ? new Date(p.value.replace(" ", "T")).toLocaleDateString("en-CA") : "" },
@@ -276,7 +372,81 @@ const MutualFund = () => {
                 
                 {/* --- TOP: MASTER GRID --- */}
                 <div className="grid-container">
-                    <h3>My Holdings</h3>
+                    <div className="grid-header-row">
+                        <div className="grid-header-title">
+                            <h3>My Holdings</h3>
+                            <span className="holdings-count-badge">{mutualFundData.length} Funds</span>
+                        </div>
+
+                        <div className="grid-header-controls">
+                            {/* Quick Search */}
+                            <div className="table-search-box">
+                                <span className="search-icon">🔍</span>
+                                <input 
+                                    type="text" 
+                                    placeholder="Search funds..." 
+                                    value={quickFilterText} 
+                                    onChange={e => setQuickFilterText(e.target.value)} 
+                                />
+                            </div>
+
+                            {/* Column Chooser Button & Popover */}
+                            <div className="col-picker-container" ref={colPickerRef}>
+                                <button 
+                                    className={`col-picker-btn ${showColPicker ? 'active' : ''}`}
+                                    onClick={() => setShowColPicker(!showColPicker)}
+                                    title="Customize Visible Columns"
+                                >
+                                    <span>⚙️</span>
+                                    <span>Columns</span>
+                                    <span className="col-count-chip">
+                                        {Object.values(visibleCols).filter(Boolean).length}/{ALL_MF_COLUMNS.length}
+                                    </span>
+                                </button>
+
+                                {showColPicker && (
+                                    <div className="col-picker-dropdown">
+                                        <div className="col-picker-header">
+                                            <h4>Visible Columns</h4>
+                                            <div className="col-picker-actions">
+                                                <button onClick={selectAllColumns}>All</button>
+                                                <button onClick={deselectAllColumns}>None</button>
+                                                <button onClick={resetDefaultColumns}>Reset</button>
+                                            </div>
+                                        </div>
+
+                                        <div className="col-search-input">
+                                            <input 
+                                                type="text" 
+                                                placeholder="Filter column list..." 
+                                                value={colSearchQuery} 
+                                                onChange={e => setColSearchQuery(e.target.value)} 
+                                                autoFocus
+                                            />
+                                        </div>
+
+                                        <div className="col-picker-list">
+                                            {ALL_MF_COLUMNS
+                                                .filter(col => col.headerName.toLowerCase().includes(colSearchQuery.toLowerCase()))
+                                                .map(col => (
+                                                    <label key={col.id} className="col-checkbox-label">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={!!visibleCols[col.id]} 
+                                                            onChange={() => toggleColumn(col.id)} 
+                                                            disabled={col.id === 'name'} 
+                                                        />
+                                                        <span className="col-name-text">{col.headerName}</span>
+                                                        {col.defaultVisible && <span className="default-pill">Default</span>}
+                                                    </label>
+                                                ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                         <AgGridReact
                             rowData={mutualFundData}
@@ -284,6 +454,7 @@ const MutualFund = () => {
                             defaultColDef={defaultColDef}
                             pagination={true}
                             paginationPageSize={20} 
+                            quickFilterText={quickFilterText}
                             onRowDoubleClicked={(e) => { setSelectedFund(e.data); setModalOpen(true); }}
                             rowSelection="single"
                             animateRows={true}

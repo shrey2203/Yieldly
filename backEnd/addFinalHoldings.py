@@ -50,15 +50,20 @@ def addFinalHoldingData(finalHoldingsData, liveQuotesMap, equityMasterCache):
             if last_close != 0:
                 dailyChangePercent = ((ltp - last_close) / last_close) * 100
                 dailyChange = (ltp - last_close) * qty
+        else:
+            ltp = averageBuy
+            totalValue = qty * averageBuy
+            unrealisedPnl = 0
+            pnlPercentage = 0
 
-            grandTotalBuy += (averageBuy * qty)
-            grandTotalValue += totalValue
+        grandTotalBuy += (averageBuy * qty)
+        grandTotalValue += totalValue
 
-            finalHoldingData.append([
-                equity, qty, averageBuy, qty * averageBuy, ltp, totalValue, 
-                unrealisedPnl, round(pnlPercentage, 2), sector, industry, 
-                peRatio, yearHigh, yearLow, category, dailyChangePercent, dailyChange
-            ])
+        finalHoldingData.append([
+            equity, qty, averageBuy, qty * averageBuy, ltp, totalValue, 
+            unrealisedPnl, round(pnlPercentage, 2), sector, industry, 
+            peRatio, yearHigh, yearLow, category, dailyChangePercent, dailyChange
+        ])
     totalPnl = grandTotalValue - grandTotalBuy
     totalPnlPercentage = (totalPnl * 100) / grandTotalBuy if grandTotalBuy != 0 else 0
     finalHoldingData.append([

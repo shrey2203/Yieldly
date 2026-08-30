@@ -3,7 +3,7 @@ refreshRatesTime = 60000
 oldTechnique = False
 nseOptimisedTechnique = False
 
-refreshFrequencyMF = 8
+refreshFrequencyMF = 24
 refreshFreqMFDayWisePositionData = 12
 backFillDayWisePositionMF = False
 dayWisePositionStartDate = "01/03/2018"

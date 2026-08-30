@@ -36,26 +36,47 @@ def createPositionsForSingleDay(rawData, currentDay):
     finalHoldings = prepareAggregatedHoldings(equityFinalHoldings)
     return realisedPnL, finalHoldings, transactionSummary
 
-def getPositions(rawData, username):
+def getPositions(rawData, username, portfolioAsOnDate=None):
     xLabel, yLabel1, yLabel2 = [], [], []
     startDate = pd.to_datetime(rawData['DATE']).min().date()
     endDate = pd.to_datetime(rawData['DATE']).max().date()
+    
+    if portfolioAsOnDate:
+        if isinstance(portfolioAsOnDate, str) and portfolioAsOnDate:
+            try:
+                portfolioAsOnDate = datetime.strptime(portfolioAsOnDate, "%Y-%m-%d").date()
+            except Exception:
+                pass
+        if isinstance(portfolioAsOnDate, date):
+            endDate = max(endDate, portfolioAsOnDate)
+            
+    latestMarketDate = helperFunctions.getLatestExistingEquityMarketData()
+    if latestMarketDate:
+        endDate = min(endDate, latestMarketDate)
+        
     userId = helperFunctions.getUserId(username)
     dbResults = EquityDayWisePosition.query.filter(
         EquityDayWisePosition.userId == userId,
         EquityDayWisePosition.asOfDate >= startDate,
         EquityDayWisePosition.asOfDate <= endDate
     ).all()
+    
     dailyStats = defaultdict(lambda: {'invested': 0, 'current': 0})
     for record in dbResults:
-        dailyStats[record.asOfDate]['invested'] += record.totalInvestment
-        dailyStats[record.asOfDate]['current'] += record.currentInvestment
+        dailyStats[record.asOfDate]['invested'] += float(record.totalInvestment or 0)
+        dailyStats[record.asOfDate]['current'] += float(record.currentInvestment or 0)
+        
+    lastKnown = None
     for currentDay in pd.date_range(startDate, endDate):
         currentDayDate = currentDay.date()
-        stats = dailyStats.get(currentDayDate, {'invested': 0, 'current': 0})
-        xLabel.append(currentDayDate)
-        yLabel1.append(stats['invested'])
-        yLabel2.append(stats['current'])
+        if currentDayDate in dailyStats and dailyStats[currentDayDate]['invested'] > 0:
+            lastKnown = dailyStats[currentDayDate]
+            
+        if lastKnown and lastKnown['invested'] > 0:
+            xLabel.append(currentDayDate.strftime("%Y-%m-%d"))
+            yLabel1.append(round(lastKnown['invested'], 2))
+            yLabel2.append(round(lastKnown['current'], 2))
+            
     return xLabel, yLabel1, yLabel2
 
 def getPrice(date, equity_short_name):
@@ -88,12 +109,13 @@ def processEquityData(df):
         for row in group.itertuples(index=False):
             qty = row.QTY
             price = row.TRADED_AT
+            tradeType = getattr(row, 'TYPE', getattr(row, 'type', getattr(row, 'Type', 'NORMAL')))
             if qty > 0:
-                buyQueue.append([row.DATE, qty, price])
+                buyQueue.append([row.DATE, qty, price, tradeType])
             elif qty < 0:
                 sellQty = abs(qty)
                 while sellQty > 0 and buyQueue:
-                    buyDate, buyQty, buyPrice = buyQueue[0]
+                    buyDate, buyQty, buyPrice, buyType = buyQueue[0]
                     matchQty = min(buyQty, sellQty)
                     realisedPnL[equity].append([buyDate, row.DATE, matchQty, buyPrice, price])
                     # if buyDate != row.DATE:
@@ -111,6 +133,7 @@ def processEquityData(df):
                         'sellPrice': price,
                         'pnl': round((price - buyPrice) * matchQty, 2),
                         'status': 'Closed',
+                        'type': str(buyType) if pd.notna(buyType) else 'NORMAL',
                         'holdingDays': holding_days,
                         'niftyLevelAtBuy': niftyLevelAtBuy,
                         'niftyLevelAtSell': niftyLevelAtSell,
@@ -133,7 +156,7 @@ def processEquityData(df):
             )
             equityFinalHoldings[equity] = list(buyQueue)
             today = date.today()
-            for buyDate, qty_remaining, buyPrice in buyQueue:
+            for buyDate, qty_remaining, buyPrice, buyType in buyQueue:
                 holding_days = (today - buyDate).days
                 unrealised_pnl = round((ltp - buyPrice) * qty_remaining, 2) if ltp > 0 else 0
                 niftyLevelAtBuy = getIndexPrice(buyDate, "^NSEI")
@@ -149,6 +172,7 @@ def processEquityData(df):
                     'sellPrice': ltp,
                     'pnl': unrealised_pnl,
                     'status': 'Open',
+                    'type': str(buyType) if pd.notna(buyType) else 'NORMAL',
                     'holdingDays': holding_days,
                     'niftyLevelAtBuy': niftyLevelAtBuy,
                     'niftyLevelAtSell': niftyLevelCurrent,
@@ -455,50 +479,86 @@ def fetchDividendsForHoldings(tickers):
     return dividendReport
 
 def syncUserDividends(userId):
-    # 1. Fetch all unique dividend events from our Master table
-    all_master_dividends = Dividends.query.all()
-    
-    # Map equityId to their short names for logging/lookup if needed
-    equityIdNameMap = {eid: e.getEquityShortName() for eid, e in state.equityMasterCache.items()}
+    try:
+        # 1. Fetch only equities the user has actually held
+        user_equity_ids = [
+            r[0] for r in db.session.query(EquityDayWisePosition.equityId)
+            .filter_by(userId=userId)
+            .distinct()
+            .all()
+        ]
+        
+        if not user_equity_ids:
+            return
 
-    for div_event in all_master_dividends:
-        eid = div_event.equityId
-        div_date = div_event.payoutDate.date() # Ensure it's a date object
-        div_amount = Decimal(str(div_event.dividendAmount))
+        # 2. Pre-load already recorded historical dividends with normalized date keys for O(1) checks
+        already_recorded_set = {
+            (rec.equityId, str(rec.payoutDate)[:10])
+            for rec in DividendsHistorical.query.filter_by(userId=userId).all()
+        }
 
-        # 2. Check the user's position on that specific day
-        # We look for the snapshot of what they held when the dividend was issued
-        position = EquityDayWisePosition.query.filter_by(
-            userId=userId, 
-            equityId=eid, 
-            asOfDate=div_date
-        ).first()
+        # 3. Only fetch dividends for the user's specific equities
+        relevant_dividends = Dividends.query.filter(Dividends.equityId.in_(user_equity_ids)).all()
+        if not relevant_dividends:
+            return
 
-        # 3. If they held shares, check if we've already processed this payout
-        if position and position.quantity > 0:
-            already_recorded = DividendsHistorical.query.filter_by(
-                equityId=eid,
-                payoutDate=div_event.payoutDate,
-                userId=userId
-            ).first()
+        # 4. In-memory bulk load of user positions (one single fast query)
+        all_positions = EquityDayWisePosition.query.filter(
+            EquityDayWisePosition.userId == userId,
+            EquityDayWisePosition.equityId.in_(user_equity_ids)
+        ).order_by(EquityDayWisePosition.asOfDate.asc()).all()
 
-            if not already_recorded:
-                total_payout = div_amount * Decimal(str(position.quantity))
+        pos_map = defaultdict(list)
+        for pos in all_positions:
+            p_date = pos.asOfDate if hasattr(pos.asOfDate, 'year') else datetime.strptime(str(pos.asOfDate)[:10], '%Y-%m-%d').date()
+            pos_map[pos.equityId].append((p_date, float(pos.quantity or 0)))
+
+        equityIdNameMap = {eid: e.getEquityShortName() for eid, e in state.equityMasterCache.items()} if state.equityMasterCache else {}
+        new_records = 0
+
+        for div_event in relevant_dividends:
+            eid = div_event.equityId
+            p_date = div_event.payoutDate
+            date_key = str(p_date)[:10]
+            
+            # Skip if already recorded
+            if (eid, date_key) in already_recorded_set:
+                continue
+
+            div_date = p_date.date() if hasattr(p_date, 'date') else datetime.strptime(date_key, '%Y-%m-%d').date()
+            div_amount = Decimal(str(div_event.dividendAmount))
+
+            # Fast in-memory lookup of latest position on or before dividend date
+            eq_positions = pos_map.get(eid, [])
+            matching_qty = 0
+            for p_as_of, p_qty in reversed(eq_positions):
+                if p_as_of <= div_date:
+                    if (div_date - p_as_of).days <= 10:
+                        matching_qty = p_qty
+                    break
+
+            if matching_qty > 0:
+                total_payout = div_amount * Decimal(str(matching_qty))
                 
                 user_div_record = DividendsHistorical(
                     userId=userId,
                     equityId=eid,
-                    payoutDate=div_event.payoutDate,
+                    payoutDate=p_date,
                     dividendPerShare=div_amount,
-                    quantityHeld=Decimal(str(position.quantity)),
+                    quantityHeld=Decimal(str(matching_qty)),
                     totalDividendAmount=total_payout
                 )
                 
                 db.session.add(user_div_record)
-                print(f"Adding Dividend: {equityIdNameMap.get(eid)} | Date: {div_date} | Payout: {total_payout}")
+                already_recorded_set.add((eid, date_key))
+                new_records += 1
+                print(f"Adding Dividend: {equityIdNameMap.get(eid, eid)} | Date: {date_key} | Payout: {total_payout}")
 
-    # Commit all new records at once
-    db.session.commit()
+        if new_records > 0:
+            db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error in syncUserDividends: {e}")
 
 def updateDividendsForHoldings():
     dividendUpdateFreq = applicationConfig.dividendUpdateFrequency

@@ -184,50 +184,101 @@ class MutualFund:
         return ((self.getTotalCurrentValue()/ self.getTotalInvestment())**(oneByTime) - 1)*100
     
 
-    def getXIRR(self):
-        if self.getMaxHoldingDays() == 0:
-            return 0
-        cashflows = [-(inv.getInvestValue() + inv.getStampDuty())
-                    for inv in self._investments]
-        cashflows.append(self.getTotalCurrentValue())
+    def getXIRR(self, asOfDate=None):
+        if not self._investments or self.getMaxHoldingDays() == 0:
+            return 0.0
+        
+        currentVal = self.getTotalCurrentValue()
+        totalInvested = self.getTotalInvestment()
+        
+        if totalInvested <= 0 or currentVal <= 0:
+            return 0.0
 
-        dates = [inv.getTransactDate() for inv in self._investments]
-        dates = [d.date() if hasattr(d, 'date') else d for d in dates]
-        dates.append(date.today())
+        # Build raw date & cashflow pairs (negative for purchases)
+        raw_entries = []
+        for inv in self._investments:
+            cost = inv.getInvestValue() + inv.getStampDuty()
+            if cost > 0:
+                t_date = inv.getTransactDate()
+                t_date = t_date.date() if hasattr(t_date, 'date') else t_date
+                raw_entries.append((t_date, -float(cost)))
 
-        t0 = dates[0]
-        times = [(d - t0).days / 365.0 for d in dates]
+        if not raw_entries:
+            return 0.0
+
+        # Valuation date & cashflow (positive for terminal value)
+        eval_date = asOfDate if asOfDate else date.today()
+        eval_date = eval_date.date() if hasattr(eval_date, 'date') else eval_date
+        raw_entries.append((eval_date, float(currentVal)))
+
+        # 1. Sort chronologically so t0 is always the earliest investment
+        raw_entries.sort(key=lambda x: x[0])
+        
+        dates = [entry[0] for entry in raw_entries]
+        cashflows = [entry[1] for entry in raw_entries]
+
+        d0 = dates[0]
+        total_days = (dates[-1] - d0).days
+        if total_days <= 0:
+            return 0.0
+
+        # Time fractions in years: (d_i - d_0) / 365.0
+        times = [(d - d0).days / 365.0 for d in dates]
 
         def npv(rate):
-            if rate <= -1:
+            if rate <= -0.999999:
                 return float('inf')
-            return sum(cf / ((1 + rate) ** t) for cf, t in zip(cashflows, times))
+            return sum(cf / ((1.0 + rate) ** t) for cf, t in zip(cashflows, times))
 
         def d_npv(rate):
-            if rate <= -1:
+            if rate <= -0.999999:
                 return float('inf')
-            return sum(-cf * t / ((1 + rate) ** (t + 1))
-                    for cf, t in zip(cashflows, times))
+            return sum(-cf * t / ((1.0 + rate) ** (t + 1.0)) for cf, t in zip(cashflows, times))
 
-        rate = 0.10  # initial guess
-        for _ in range(100):
-            f = npv(rate)
-            df = d_npv(rate)
+        # 2. Try Newton-Raphson with multiple starting guesses
+        for start_rate in [0.10, 0.0, 0.25, -0.10, 0.50, -0.30]:
+            rate = start_rate
+            for _ in range(100):
+                f = npv(rate)
+                df = d_npv(rate)
 
-            if abs(df) < 1e-10:
-                break
+                if abs(df) < 1e-12:
+                    break
 
-            new_rate = rate - f / df
+                new_rate = rate - f / df
+                new_rate = min(max(new_rate, -0.999), 10.0)
 
-            # 🔒 Clamp to valid domain (CRITICAL)
-            new_rate = min(max(new_rate, -0.999999), 10.0)
+                if abs(new_rate - rate) < 1e-7 and abs(f) < 1e-3:
+                    return round(new_rate * 100.0, 2)
 
-            if abs(new_rate - rate) < 1e-7:
-                return new_rate * 100
+                rate = new_rate
 
-            rate = new_rate
+        # 3. Fallback: Bisection root finder across [-0.999, 10.0]
+        low = -0.999
+        high = 10.0
+        f_low = npv(low)
+        f_high = npv(high)
 
-        raise RuntimeError("XIRR did not converge")
+        if f_low * f_high <= 0:
+            for _ in range(100):
+                mid = (low + high) / 2.0
+                f_mid = npv(mid)
+
+                if abs(f_mid) < 1e-4 or (high - low) < 1e-6:
+                    return round(mid * 100.0, 2)
+
+                if f_low * f_mid <= 0:
+                    high = mid
+                    f_high = f_mid
+                else:
+                    low = mid
+                    f_low = f_mid
+
+        # 4. Safe fallback: return CAGR if XIRR cannot be determined
+        try:
+            return round(self.getCAGR(), 2)
+        except Exception:
+            return 0.0
 
     
     def to_dict(self, userId, asOfDate):
@@ -247,7 +298,7 @@ class MutualFund:
             "holdingDays": max((inv.getHoldingDays() for inv in self._investments), default=0),
             "absPNLPercentage": self.getAbsPNLPercentage(),
             "cagr": self.getCAGR(),
-            "xirr": self.getXIRR(),
+            "xirr": self.getXIRR(asOfDate),
             "ltcg": tax_data["ltcg"],
             "stcg": tax_data["stcg"]
         }

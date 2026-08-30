@@ -89,6 +89,13 @@ def fetchPortfolio():
         return jsonify({"error": "User portfolio not found"}), 404
     t1 = time.time()
     fetchEquityDayWisePnlPosition.persistEquityDayWisePnlPosition(userId, dataframe)
+    resolved_uid = helperFunctions.getUserId(userId.lower())
+    if resolved_uid:
+        try:
+            fetchEquityDayWisePnlPosition.syncUserDividends(resolved_uid)
+        except Exception as e:
+            print(f"Error syncing user dividends in fetchPortfolio: {e}")
+            
     realisedPnL, finalHoldings, transactionSummary = fetchEquityDayWisePnlPosition.createPositionsForSingleDay(dataframe, portfolioAsOnDate)
     portfolioDateObj = datetime.datetime.strptime(str(portfolioAsOnDate), "%Y-%m-%d").date()
     while portfolioDateObj not in state.marketDataCache.keys():
@@ -96,8 +103,37 @@ def fetchPortfolio():
         if (date.today() - portfolioDateObj).days > 30: 
             break
     liveQuotesMapScrapping = state.marketDataCache.get(portfolioDateObj, {})
+    # Build mapping for trade types (e.g. IPO) and allotment totals
+    type_col = next((c for c in dataframe.columns if str(c).strip().lower() == 'type'), None)
+    equity_col = next((c for c in dataframe.columns if str(c).strip().lower() == 'equity'), 'EQUITY')
+    qty_col = next((c for c in dataframe.columns if str(c).strip().lower() == 'qty'), 'QTY')
+    price_col = next((c for c in dataframe.columns if str(c).strip().lower() in ['traded_at', 'price', 'rate']), 'TRADED_AT')
+    
+    equityTypeMap = {}
+    allottedQtyMap = {}
+    allottedCostMap = {}
+    
+    for _, row in dataframe.iterrows():
+        eq = str(row[equity_col]).strip()
+        val = str(row[type_col]).strip().upper() if type_col is not None and pd.notna(row[type_col]) else ""
+        if val == 'IPO' or 'IPO' in val:
+            equityTypeMap[eq] = 'IPO'
+            
+        raw_qty = row[qty_col] if qty_col in row and pd.notna(row[qty_col]) else 0
+        raw_price = row[price_col] if price_col in row and pd.notna(row[price_col]) else 0
+        if raw_qty > 0:
+            allottedQtyMap[eq] = allottedQtyMap.get(eq, 0) + raw_qty
+            allottedCostMap[eq] = allottedCostMap.get(eq, 0) + (raw_qty * raw_price)
+
     rawHoldingData = addFinalHoldings.addFinalHoldingData(finalHoldings, liveQuotesMapScrapping, state.equityMasterCache)
-    finalHoldingsData = commonUtils.convertFinalHoldings(rawHoldingData, transactionSummary, True)
+    finalHoldingsData = commonUtils.convertFinalHoldings(
+        rawHoldingData, 
+        transactionSummary, 
+        True, 
+        equityTypeMap, 
+        allottedQtyMap, 
+        allottedCostMap
+    )
     rawRealisedData = {}
     for equity, trades in realisedPnL.items():
         rawRealisedData[equity] = [
@@ -126,7 +162,7 @@ def fetchChartData():
     excelPath = '/Users/bhavya/Downloads/HOLDINGS/' + username + '.xlsx'
     
     dataframe = pd.read_excel(excelPath, 0)
-    xLabel, yLabel1, yLabel2 = fetchEquityDayWisePnlPosition.getPositions(dataframe, username)
+    xLabel, yLabel1, yLabel2 = fetchEquityDayWisePnlPosition.getPositions(dataframe, username, portfolioAsOnDate)
     return jsonify([xLabel, yLabel1, yLabel2])
 
 @app.route("/fetchDividends", methods=['GET'])
@@ -211,23 +247,67 @@ def fetch_scrip_dividends():
 
 @app.route("/fetchTotalDividends", methods=['GET'])
 def fetch_total_dividends():
-    userId = request.args.get('userId', '').upper()
+    user_param = request.args.get('userId', '')
+    if not user_param or str(user_param).lower() in ['null', 'undefined', '']:
+        from dataQuery.userQuery import User
+        first_u = User.query.first()
+        user_param = first_u.getUserName() if first_u else 'SHREY'
     
-    if not userId:
-        return jsonify({"totalDividends": 0})
-    
-    userId = helperFunctions.getUserId(userId.lower())
-    if not userId:
-        return jsonify({"totalDividends": 0})
+    resolved_id = helperFunctions.getUserId(str(user_param).lower())
+    if not resolved_id and str(user_param).isdigit():
+        resolved_id = int(user_param)
+        
+    if not resolved_id:
+        from dataQuery.userQuery import User
+        first_u = User.query.first()
+        resolved_id = first_u.getId() if first_u else None
+        
+    if not resolved_id:
+        return jsonify({"totalDividends": 0, "dividendsList": []})
     
     from dataQuery.dividendsHistoricalQuery import DividendsHistorical
-    # Sum all dividends for this user across all stocks
-    totalDividendRecords = DividendsHistorical.query.filter_by(userId=userId).all()
+    from dataQuery.equityMasterQuery import EquityMaster
+    
+    # Fast check: only sync if not already recorded
+    has_records = DividendsHistorical.query.filter_by(userId=resolved_id).first() is not None
+    if not has_records:
+        try:
+            fetchEquityDayWisePnlPosition.syncUserDividends(resolved_id)
+        except Exception as e:
+            print(f"Error syncing user dividends: {e}")
+    
+    # Query all dividends for this user across all stocks
+    totalDividendRecords = DividendsHistorical.query.filter_by(userId=resolved_id).all()
     
     totalDividends = sum(float(record.totalDividendAmount) if record.totalDividendAmount else 0 
                         for record in totalDividendRecords)
     
-    return jsonify({"totalDividends": round(totalDividends, 2)})
+    dividendsList = []
+    for record in totalDividendRecords:
+        equity_obj = state.equityMasterCache.get(record.equityId) if state.equityMasterCache else None
+        if not equity_obj:
+            equity_obj = EquityMaster.query.filter_by(id=record.equityId).first()
+        stock_name = equity_obj.getEquityShortName() if equity_obj else f"Equity #{record.equityId}"
+        long_name = equity_obj.getEquityLongName() if equity_obj else stock_name
+        
+        p_date = record.payoutDate.strftime("%Y-%m-%d") if hasattr(record.payoutDate, 'strftime') else str(record.payoutDate)
+        
+        dividendsList.append({
+            "id": record.id,
+            "stock": stock_name,
+            "companyName": long_name,
+            "payoutDate": p_date,
+            "dividendPerShare": float(record.dividendPerShare) if record.dividendPerShare else 0.0,
+            "quantity": float(record.quantityHeld) if record.quantityHeld else 0.0,
+            "amount": float(record.totalDividendAmount) if record.totalDividendAmount else 0.0
+        })
+        
+    dividendsList.sort(key=lambda x: x['payoutDate'] or '', reverse=True)
+    
+    return jsonify({
+        "totalDividends": round(totalDividends, 2),
+        "dividendsList": dividendsList
+    })
 
 @app.route("/fetchStockAnalysis", methods=["GET"])
 def fetchStockAnalysis():
