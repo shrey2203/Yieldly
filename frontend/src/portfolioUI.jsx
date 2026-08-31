@@ -801,7 +801,7 @@ const PortfolioUI = ({
                                 <h3>Total Dividends</h3>
                                 <p>₹{formatINR(summary.totalDividends)}</p>
                                 <span className="card-sub-info" style={{ color: '#10b981', fontSize: '11px', fontWeight: 600 }}>
-                                    ✨ Double-click to view all
+                                    ✨ Click to view all
                                 </span>
                             </div>
                         </div>

@@ -54,12 +54,18 @@ def getPositions(rawData, username, portfolioAsOnDate=None):
     if latestMarketDate:
         endDate = min(endDate, latestMarketDate)
         
-    userId = helperFunctions.getUserId(username)
-    dbResults = EquityDayWisePosition.query.filter(
-        EquityDayWisePosition.userId == userId,
-        EquityDayWisePosition.asOfDate >= startDate,
-        EquityDayWisePosition.asOfDate <= endDate
-    ).all()
+    if str(username).upper() == 'COMBINED':
+        dbResults = EquityDayWisePosition.query.filter(
+            EquityDayWisePosition.asOfDate >= startDate,
+            EquityDayWisePosition.asOfDate <= endDate
+        ).all()
+    else:
+        userId = helperFunctions.getUserId(username)
+        dbResults = EquityDayWisePosition.query.filter(
+            EquityDayWisePosition.userId == userId,
+            EquityDayWisePosition.asOfDate >= startDate,
+            EquityDayWisePosition.asOfDate <= endDate
+        ).all()
     
     dailyStats = defaultdict(lambda: {'invested': 0, 'current': 0})
     for record in dbResults:

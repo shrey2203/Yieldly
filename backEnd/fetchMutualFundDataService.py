@@ -25,9 +25,15 @@ def def_value():
 def fetchMutualFund(mutualFundRawData, userId, reset = False):
     startTime = time.time()
     allUsersQueried = User.query.all()
-    for user in allUsersQueried:
-        if userId.lower() == user.getUserName().lower(): 
+    user = None
+    for u in allUsersQueried:
+        if str(userId).lower() == u.getUserName().lower(): 
+            user = u
             break
+            
+    if not user:
+        # Fallback to first user or dummy object
+        user = allUsersQueried[0] if allUsersQueried else User(username=userId, panNumber=userId, emailAddress=f"{userId}@yieldly.com")
 
     global mutualFundPackage
     if not reset:
@@ -69,13 +75,19 @@ def fetchMutualFund(mutualFundRawData, userId, reset = False):
     mutualFundDataAsOfDate = mutualFundPackage.to_dict()
     updateMutualFundDayWisePositionData(user.getId(), mutualFundPackage, mutualFundRawData, applicationConfig.backFillDayWisePositionMF)
     mutualFundDataAsOfDateUpdated = mutualFundPackage.postPersistingDayWisePosition(mutualFundDataAsOfDate)
-    output = MutualFundDayWisePosition.query.filter_by(userId=user.getId()).all()
+    
+    if str(userId).upper() == 'COMBINED':
+        output = MutualFundDayWisePosition.query.all()
+    else:
+        output = MutualFundDayWisePosition.query.filter_by(userId=user.getId()).all()
+        
     mutualFundDayWiseCurrentAndTotalValue = {}
     for fund in output:
-        if str(fund.getAsOfDate()) not in mutualFundDayWiseCurrentAndTotalValue:
-            mutualFundDayWiseCurrentAndTotalValue[str(fund.getAsOfDate())] = {'currentInvestment':0, 'totalInvestment':0}
-        mutualFundDayWiseCurrentAndTotalValue[str(fund.getAsOfDate())]['currentInvestment'] += fund.getCurrentInvestment()
-        mutualFundDayWiseCurrentAndTotalValue[str(fund.getAsOfDate())]['totalInvestment'] += fund.getTotalInvestment()
+        d_key = str(fund.getAsOfDate())
+        if d_key not in mutualFundDayWiseCurrentAndTotalValue:
+            mutualFundDayWiseCurrentAndTotalValue[d_key] = {'currentInvestment': 0, 'totalInvestment': 0}
+        mutualFundDayWiseCurrentAndTotalValue[d_key]['currentInvestment'] += fund.getCurrentInvestment()
+        mutualFundDayWiseCurrentAndTotalValue[d_key]['totalInvestment'] += fund.getTotalInvestment()
     mutualFundDataAsOfDateUpdated['mutualFundDayWiseCurrentAndTotalValue'] = mutualFundDayWiseCurrentAndTotalValue
 
     endTme = time.time()

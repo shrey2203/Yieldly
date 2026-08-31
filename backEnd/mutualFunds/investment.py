@@ -1,3 +1,4 @@
+import financialMath
 from datetime import date
 
 class Investment:
@@ -80,20 +81,16 @@ class Investment:
         self._profitLoss = value 
 
     def getHoldingDays(self):
-        return (date.today() - self._transactDate.date()).days
+        return financialMath.calculate_holding_days(self._transactDate)
     
     def getAbsPNLPercentange(self):
-        return (self._profitLoss/self._investValue)*100
+        return financialMath.calculate_abs_return(self._profitLoss, self._investValue)
     
     def getcagr(self):
-        if self._holdingDays == 0: return 0
-        oneByTime = 365/self._holdingDays
-        return ((self._currentValue/ self._investValue)**(oneByTime) - 1)*100
+        return financialMath.calculate_cagr(self._investValue, self._currentValue, self._holdingDays)
     
     def isLongTermOrShortTerm(self):
-        if (date.today() - self._transactDate.date()).days > 365:
-            return "LTCG"
-        return "STCG"
+        return financialMath.get_tax_holding_type(self._holdingDays)
 
     def to_dict(self):
         return {

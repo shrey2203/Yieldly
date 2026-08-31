@@ -47,7 +47,7 @@ def server_status():
 @app.route("/login", methods=["POST"])
 def login():
     payload = request.get_json(silent=True) or {}
-    username = payload.get("username", "")
+    username = payload.get("username", "").strip()
     if not username:
         return jsonify({"message": "Username is required"}), 400
 
@@ -55,15 +55,22 @@ def login():
     userObject = cast(Optional[User], User.query.filter_by(id=userId).first())
     if not userObject:
         return jsonify({"message": "Invalid username"}), 401
+        
     fetchMutualFundDataService.updateMutualFundData(withTimeContrainst=True)
-    # fetchEquityDataService.updateEquitySectors()
     fetchEquityDayWisePnlPosition.updateEquityDataBulk()
     fetchEquityDayWisePnlPosition.updateDividendsForHoldings()
-    # fetchEquityDataService.updateEquityData()
-    # fetchEquityDataService.updateEquityDataNew()
-    # fetchEquityDayWisePnlPosition.updateEquityDataFromDateCustom("ETERNAL", date(2018, 1, 1))
     initialiseApplication.initialise()
-    # fetchEquityDayWisePnlPosition.syncUserDividends(userId)
+    
+    if username.upper() == "COMBINED":
+        all_users = User.query.filter(User.username != 'COMBINED').all()
+        for u in all_users:
+            try:
+                fetchEquityDayWisePnlPosition.syncUserDividends(u.getId())
+            except Exception as e:
+                pass
+    else:
+        fetchEquityDayWisePnlPosition.syncUserDividends(userId)
+        
     user_name = userObject.getUserName()
     access_token = create_access_token(identity=user_name)
     return jsonify({"token": access_token, "username": user_name}), 200
@@ -76,23 +83,29 @@ def protected():
 
 @app.route("/fetchPortfolio", methods=["GET"])
 def fetchPortfolio():
-    userId = request.args.get("userId").upper()
+    userId = request.args.get("userId", "COMBINED").upper()
     portfolioAsOnDate = request.args.get("selectedDate")
     print(f"User Id is : {userId}")
     print(f"Portfolio date is : {portfolioAsOnDate}")
     if not portfolioAsOnDate:
         portfolioAsOnDate = date.today().strftime("%Y-%m-%d") 
-    excelPath = f'/Users/bhavya/Downloads/HOLDINGS/{userId}.xlsx'
+        
     try:
-        dataframe = pd.read_excel(excelPath, 0)
+        dataframe = helperFunctions.getUserEquityDataFrame(userId)
     except FileNotFoundError:
         return jsonify({"error": "User portfolio not found"}), 404
+        
     t1 = time.time()
     fetchEquityDayWisePnlPosition.persistEquityDayWisePnlPosition(userId, dataframe)
     resolved_uid = helperFunctions.getUserId(userId.lower())
     if resolved_uid:
         try:
-            fetchEquityDayWisePnlPosition.syncUserDividends(resolved_uid)
+            if userId == "COMBINED":
+                all_users = User.query.filter(User.username != 'COMBINED').all()
+                for u in all_users:
+                    fetchEquityDayWisePnlPosition.syncUserDividends(u.getId())
+            else:
+                fetchEquityDayWisePnlPosition.syncUserDividends(resolved_uid)
         except Exception as e:
             print(f"Error syncing user dividends in fetchPortfolio: {e}")
             
@@ -155,13 +168,15 @@ def fetchPortfolio():
 
 @app.route("/fetchChartData", methods=["GET"])
 def fetchChartData():
-    username = request.args.get("userId").upper()
+    username = request.args.get("userId", "COMBINED").upper()
     portfolioAsOnDate = request.args.get("selectedDate")
     if portfolioAsOnDate == '' or portfolioAsOnDate is None:
         portfolioAsOnDate = date.today()
-    excelPath = '/Users/bhavya/Downloads/HOLDINGS/' + username + '.xlsx'
-    
-    dataframe = pd.read_excel(excelPath, 0)
+    try:
+        dataframe = helperFunctions.getUserEquityDataFrame(username)
+    except FileNotFoundError:
+        return jsonify([[], [], []])
+        
     xLabel, yLabel1, yLabel2 = fetchEquityDayWisePnlPosition.getPositions(dataframe, username, portfolioAsOnDate)
     return jsonify([xLabel, yLabel1, yLabel2])
 
@@ -171,7 +186,13 @@ def fetchDividends():
     raw_tickers = request.args.get("tickers", "")
     tickers = [ticker.strip().upper() for ticker in raw_tickers.split(",") if ticker.strip()]
 
-    fetchEquityDayWisePnlPosition.syncUserDividends(username)
+    if username == "COMBINED":
+        all_users = User.query.filter(User.username != 'COMBINED').all()
+        for u in all_users:
+            fetchEquityDayWisePnlPosition.syncUserDividends(u.getId())
+    else:
+        fetchEquityDayWisePnlPosition.syncUserDividends(username)
+        
     return jsonify(fetchEquityDayWisePnlPosition.fetchDividendsForHoldings(tickers))
     
 
@@ -214,11 +235,10 @@ def fetch_scrip_history():
 
 @app.route("/fetchScripDividends", methods=['GET'])
 def fetch_scrip_dividends():
-    username = request.args.get('userId', '').upper()
+    username = request.args.get('userId', 'COMBINED').upper()
     symbol = request.args.get('symbol')
-    userId = helperFunctions.getUserId(username.lower())
     
-    if not userId or not symbol:
+    if not symbol:
         return jsonify([])
     
     equityNameIdMap = {e.getEquityShortName(): eid for eid, e in state.equityMasterCache.items()}
@@ -229,10 +249,18 @@ def fetch_scrip_dividends():
     
     # Fetch dividend records for this user and stock
     from dataQuery.dividendsHistoricalQuery import DividendsHistorical
-    dividendRecords = DividendsHistorical.query.filter_by(
-        userId=userId, 
-        equityId=equityId
-    ).order_by(DividendsHistorical.payoutDate.desc()).all()
+    if username == "COMBINED":
+        dividendRecords = DividendsHistorical.query.filter_by(
+            equityId=equityId
+        ).order_by(DividendsHistorical.payoutDate.desc()).all()
+    else:
+        userId = helperFunctions.getUserId(username.lower())
+        if not userId:
+            return jsonify([])
+        dividendRecords = DividendsHistorical.query.filter_by(
+            userId=userId, 
+            equityId=equityId
+        ).order_by(DividendsHistorical.payoutDate.desc()).all()
     
     dividends = []
     for record in dividendRecords:
@@ -249,35 +277,42 @@ def fetch_scrip_dividends():
 def fetch_total_dividends():
     user_param = request.args.get('userId', '')
     if not user_param or str(user_param).lower() in ['null', 'undefined', '']:
-        from dataQuery.userQuery import User
-        first_u = User.query.first()
-        user_param = first_u.getUserName() if first_u else 'SHREY'
-    
-    resolved_id = helperFunctions.getUserId(str(user_param).lower())
-    if not resolved_id and str(user_param).isdigit():
-        resolved_id = int(user_param)
+        user_param = 'COMBINED'
         
-    if not resolved_id:
-        from dataQuery.userQuery import User
-        first_u = User.query.first()
-        resolved_id = first_u.getId() if first_u else None
-        
-    if not resolved_id:
-        return jsonify({"totalDividends": 0, "dividendsList": []})
-    
+    uname_upper = str(user_param).upper()
     from dataQuery.dividendsHistoricalQuery import DividendsHistorical
     from dataQuery.equityMasterQuery import EquityMaster
-    
-    # Fast check: only sync if not already recorded
-    has_records = DividendsHistorical.query.filter_by(userId=resolved_id).first() is not None
-    if not has_records:
-        try:
-            fetchEquityDayWisePnlPosition.syncUserDividends(resolved_id)
-        except Exception as e:
-            print(f"Error syncing user dividends: {e}")
-    
-    # Query all dividends for this user across all stocks
-    totalDividendRecords = DividendsHistorical.query.filter_by(userId=resolved_id).all()
+
+    if uname_upper == "COMBINED":
+        all_users = User.query.filter(User.username != 'COMBINED').all()
+        for u in all_users:
+            try:
+                fetchEquityDayWisePnlPosition.syncUserDividends(u.getId())
+            except Exception as e:
+                pass
+        totalDividendRecords = DividendsHistorical.query.all()
+    else:
+        resolved_id = helperFunctions.getUserId(str(user_param).lower())
+        if not resolved_id and str(user_param).isdigit():
+            resolved_id = int(user_param)
+            
+        if not resolved_id:
+            first_u = User.query.first()
+            resolved_id = first_u.getId() if first_u else None
+            
+        if not resolved_id:
+            return jsonify({"totalDividends": 0, "dividendsList": []})
+        
+        # Fast check: only sync if not already recorded
+        has_records = DividendsHistorical.query.filter_by(userId=resolved_id).first() is not None
+        if not has_records:
+            try:
+                fetchEquityDayWisePnlPosition.syncUserDividends(resolved_id)
+            except Exception as e:
+                print(f"Error syncing user dividends: {e}")
+        
+        # Query all dividends for this user across all stocks
+        totalDividendRecords = DividendsHistorical.query.filter_by(userId=resolved_id).all()
     
     totalDividends = sum(float(record.totalDividendAmount) if record.totalDividendAmount else 0 
                         for record in totalDividendRecords)
@@ -324,9 +359,11 @@ def fetchHeatmapData():
 
 @app.route("/fetchMutualFundData", methods=["GET"])
 def fetchMutualFundData():
-    userId = request.args.get("userId").upper()
-    excel_file = '/Users/bhavya/Downloads/HOLDINGS/' + userId + '_MF.xlsx'
-    dataframe = pd.read_excel(excel_file, 0)
+    userId = request.args.get("userId", "COMBINED").upper()
+    try:
+        dataframe = helperFunctions.getUserMutualFundDataFrame(userId)
+    except FileNotFoundError:
+        return jsonify({})
     return jsonify(fetchMutualFundDataService.fetchMutualFund(dataframe, userId, True))
 
 # @app.route("/marketStatus", methods=["GET"])
@@ -373,7 +410,7 @@ if __name__ == "__main__":
     # if not os.environ.get("WERKZEUG_RUN_MAIN"):
     # marketDataThread = threading.Thread(target=executeMarketDataService, daemon=True)
     # marketDataThread.start()
-    preferred_port = int(os.getenv("PORT", "5000"))
+    preferred_port = int(os.getenv("PORT", "5001"))
     port = get_available_port(preferred_port)
     print(f"Starting Flask server on port {port}")
     app.run(debug=False, use_reloader=False, port=port)

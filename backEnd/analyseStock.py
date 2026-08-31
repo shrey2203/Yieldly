@@ -1,333 +1,357 @@
-# import numpy as np
-# import pandas as pd
-# from selenium import webdriver
-# from selenium.webdriver.common.by import By
-# import sys
-# sys.path.append('/Users/bhavya/Downloads/API')
-# from addToSheet import *
-# import applicationConfig
+"""
+Stock Analysis Engine for Fundamental & Technical Metrics.
+Fetches and calculates:
+- Stock P/E Ratio
+- Quarterly EPS for the last 4 quarters
+- Promoter, FII, and DII Holdings and QoQ Changes
+- 14-period Relative Strength Index (RSI)
+- Debt to Equity (D/E) Ratio
+- Market Cap, Current Price, ROCE, and ROE
+"""
 
-
-# class AnalyseStock:
-#     def __init__(self, stock):
-#         self.stock = stock.upper()
-#         self.fiiHolding = None
-#         self.diiHolding = None
-#         self.rsi = None
-#         self.eps = None
-#         self.support_resistance = None
-#         self.pe_ratio = None
-#         self.fibonacci = None
-
-#     def getShareHoldingPattern(self, driver):
-#         def getshareHoldingPatternEntity(shareholdingYears, entityID):
-#             shareHoldingMap = []
-#             path = "//section[@id='shareholding']/div[2]/div[1]/table[1]/tbody[1]/tr[" + str(entityID) + "]/td"
-#             shareholdingEntity = driver.find_elements(By.XPATH, path)
-#             for i in range(len(shareholdingYears)):
-#                 holding = shareholdingEntity[i].text
-#                 shareHoldingMap.append(holding)
-#             return shareHoldingMap
-        
-#         shareHoldingPattern = []
-#         shareholdingYears = driver.find_elements(By.XPATH, "//section[@id='shareholding']/div[2]/div[1]/table[1]/thead[1]/tr[1]/th")
-#         totalShareHolders = driver.find_elements(By.XPATH, "//section[@id='shareholding']/div[2]/div[1]/table[1]/tbody[1]/tr")
-#         for i in range(len(totalShareHolders)):
-#             shareHoldingPatternEntity = getshareHoldingPatternEntity(shareholdingYears, i+1)
-#             shareHoldingPattern.append(shareHoldingPatternEntity)
-#         allYears = self.getYears(shareholdingYears)
-#         for item in shareHoldingPattern:
-#             if item[0] == "FIIs +" and len(item) > 3:
-#                 lastHolding = float(item[-1].replace("%", ""))
-#                 secondLastHolding = float(item[-2].replace("%", ""))
-#                 if lastHolding > secondLastHolding:
-#                     self.fiiHolding = "⬆" + str(round(lastHolding - secondLastHolding, 3)) + "%"
-#                 else:
-#                     self.fiiHolding = "⬇" + str(round(lastHolding - secondLastHolding, 3)) + "%"
-#             elif item[0] == "DIIs +" and len(item) > 3:
-#                 lastHolding = float(item[-1].replace("%", ""))
-#                 secondLastHolding = float(item[-2].replace("%", ""))
-#                 if lastHolding > secondLastHolding:
-#                     self.diiHolding = "⬆" + str(round(lastHolding - secondLastHolding, 3)) + "%"
-#                 else:
-#                     self.diiHolding = "⬇" + str(round(lastHolding - secondLastHolding, 3)) + "%"
-#         return [self.fiiHolding, self.diiHolding]
-
-#     def fetchStockAnalysisData(self, stock):
-#         options = webdriver.ChromeOptions()
-#         options.add_experimental_option("detach", True)
-#         if not applicationConfig.openBrowser:
-#             options.add_argument('headless')
-#         driver = webdriver.Chrome(options=options)
-#         driver.get("https://www.screener.in/login/?")
-#         if applicationConfig.fullScreen:
-#             driver.fullscreen_window()    
-
-#         # driver.find_element("name", 'username').send_keys(applicationConfig.username)
-#         # driver.find_element("name", 'password').send_keys(applicationConfig.password)
-
-#         # button = driver.find_element(By.XPATH, "//button[@class='button-primary']")
-#         # driver.execute_script("arguments[0].click();", button)
-
-#         driver.get("https://www.screener.in/company/" + stock)
-#         return self.getShareHoldingPattern(driver)
-
-
-
-    
-#     def calculate_rsi(self, closing_prices, period=14):
-#         """
-#         Calculate the Relative Strength Index (RSI).
-#         :param closing_prices: List of closing prices.
-#         :param period: Lookback period for RSI calculation.
-#         """
-#         deltas = np.diff(closing_prices)
-#         gains = np.where(deltas > 0, deltas, 0)
-#         losses = np.where(deltas < 0, -deltas, 0)
-        
-#         avg_gain = np.mean(gains[:period])
-#         avg_loss = np.mean(losses[:period])
-        
-#         if avg_loss == 0:
-#             self.rsi = 100
-#         else:
-#             rs = avg_gain / avg_loss
-#             self.rsi = 100 - (100 / (1 + rs))
-        
-#         return self.rsi
-    
-#     def calculate_eps(self, net_income, total_shares):
-#         """
-#         Calculate Earnings Per Share (EPS).
-#         :param net_income: Net income of the company.
-#         :param total_shares: Total outstanding shares.
-#         """
-#         self.eps = net_income / total_shares if total_shares else "Invalid Data"
-#         return self.eps
-
-#     def calculate_support_resistance(self, price_data):
-#         """
-#         Calculate support and resistance levels based on recent high and low prices.
-#         :param price_data: List of historical prices.
-#         """
-#         self.support_resistance = {
-#             "support": min(price_data[-10:]),
-#             "resistance": max(price_data[-10:])
-#         }
-#         return self.support_resistance
-
-#     def calculate_pe_ratio(self, market_price, eps):
-#         """
-#         Calculate Price-to-Earnings (P/E) Ratio.
-#         :param market_price: Current market price of the stock.
-#         :param eps: Earnings per share.
-#         """
-#         self.pe_ratio = market_price / eps if eps > 0 else "N/A"
-#         return self.pe_ratio
-    
-#     def calculate_fibonacci_levels(self, high, low):
-#         """
-#         Calculate Fibonacci retracement levels.
-#         :param high: Highest price.
-#         :param low: Lowest price.
-#         """
-#         diff = high - low
-#         levels = {
-#             "23.6%": high - (diff * 0.236),
-#             "38.2%": high - (diff * 0.382),
-#             "50.0%": high - (diff * 0.500),
-#             "61.8%": high - (diff * 0.618),
-#             "78.6%": high - (diff * 0.786)
-#         }
-#         self.fibonacci = levels
-#         return self.fibonacci
-    
-#     def getYears(self, displayYears):
-#         years = []
-#         for i in range(len(displayYears)):
-#             year = displayYears[i].text
-#             years.append(year)
-#         return years
-    
-
-# # Example Usage
-# if __name__ == "__main__":
-#     stock_analyzer = AnalyseStock("AAPL")
-#     print(stock_analyzer.calculate_rsi([150, 152, 148, 147, 149, 151, 153, 155, 157, 156, 154]))
-#     print(stock_analyzer.calculate_fii_holding({"AAPL": "12.5%"}))
-#     print(stock_analyzer.calculate_eps(5000000, 1000000))
-#     print(stock_analyzer.calculate_support_resistance([140, 142, 144, 145, 146, 148, 149, 150, 151, 153]))
-#     print(stock_analyzer.calculate_pe_ratio(150, 5))
-#     print(stock_analyzer.calculate_fibonacci_levels(160, 140))
-
-
-import numpy as np
+import re
+import requests
 import pandas as pd
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from datetime import datetime
-import applicationConfig
+import numpy as np
+import yfinance as yf
+from datetime import datetime, date
+from bs4 import BeautifulSoup
+import financialMath
+
 
 class AnalyseStock:
-    def __init__(self, stock):
-        self.stock = stock.upper()
-        self.fiiHolding = None
-        self.diiHolding = None
-        self.rsi = None
-        self.eps = None
-        self.supportResistance = None
-        self.peRatio = None
-        self.fibonacci = None
-
-    def getShareHoldingPattern(self, driver):
-        try:
-            # Find the table rows
-            rows = driver.find_elements(By.XPATH, "//section[@id='shareholding']//table[1]/tbody/tr")
-            
-            for row in rows:
-                cols = row.find_elements(By.TAG_NAME, "td")
-                if not cols: continue
-                
-                entityName = cols[0].text
-                # We need at least 3 columns to compare last two quarters
-                if len(cols) < 3: continue 
-
-                def parsePercent(val):
-                    try:
-                        return float(val.replace("%", "").strip())
-                    except ValueError:
-                        return 0.0
-
-                lastVal = parsePercent(cols[-1].text)
-                prevVal = parsePercent(cols[-2].text)
-                diff = round(lastVal - prevVal, 3)
-                trend = "⬆" if diff > 0 else "⬇"
-                formattedVal = f"{trend}{abs(diff)}%"
-
-                if "FIIs" in entityName:
-                    self.fiiHolding = formattedVal
-                elif "DIIs" in entityName:
-                    self.diiHolding = formattedVal
-            
-            return [self.fiiHolding, self.diiHolding]
-        except Exception as e:
-            print(f"Error scraping holdings: {e}")
-            return [None, None]
-
-    def fetchStockAnalysisData(self, stock):
-        options = webdriver.ChromeOptions()
-        if not applicationConfig.openBrowser:
-            options.add_argument('--headless')
-        
-        driver = webdriver.Chrome(options=options)
-        try:
-            # Screener.in URL structure
-            driver.get(f"https://www.screener.in/company/{stock}/consolidated/")
-            raw_quarterly_df = self.get_full_financials(driver)
-            health_report = self.analyze_quarterly_results(raw_quarterly_df)
-            print("-" * 30)
-            print(f"📊 QUARTERLY HEALTH CHECK: {stock}")
-            print("-" * 30)
-            for metric, value in health_report.items():
-                print(f"{metric}: {value}")
-            print("-" * 30)
-            holdings = self.getShareHoldingPattern(driver)
-            return holdings
-        finally:
-            driver.quit() # Always close the driver
-
-    def calculateRsi(self, prices, period=14):
-        if len(prices) < period: return None
-        
-        deltas = np.diff(prices)
-        gains = np.where(deltas > 0, deltas, 0)
-        losses = np.where(deltas < 0, -deltas, 0)
-        
-        avgGain = np.mean(gains[:period])
-        avgLoss = np.mean(losses[:period])
-        
-        if avgLoss == 0:
-            self.rsi = 100
-        else:
-            rs = avgGain / avgLoss
-            self.rsi = 100 - (100 / (1 + rs))
-        return round(self.rsi, 2)
-
-    def calculateFibonacciLevels(self, high, low):
-        diff = high - low
-        self.fibonacci = {
-            "23.6%": round(high - (diff * 0.236), 2),
-            "38.2%": round(high - (diff * 0.382), 2),
-            "50.0%": round(high - (diff * 0.500), 2),
-            "61.8%": round(high - (diff * 0.618), 2)
+    def __init__(self, stock: str):
+        self.stock = stock.strip().upper()
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
         }
-        return self.fibonacci
 
-    def calculateSupportResistance(self, prices):
-        # Using a 10-period window as per your original logic
-        recent_data = prices[-10:]
-        self.supportResistance = {
-            "support": min(recent_data),
-            "resistance": max(recent_data)
+    def fetchStockAnalysisData(self, stock: str = None) -> dict:
+        """
+        Main entrypoint to fetch comprehensive fundamental and technical metrics for a stock.
+        """
+        target_stock = (stock or self.stock).strip().upper()
+        
+        result = {
+            "stock": target_stock,
+            "companyName": target_stock,
+            "currentPrice": None,
+            "marketCap": None,
+            "peRatio": None,
+            "debtToEquity": None,
+            "roce": None,
+            "roe": None,
+            "rsi": None,
+            "promoterHolding": None,
+            "promoterChange": None,
+            "fiiHolding": None,
+            "fiiChange": None,
+            "diiHolding": None,
+            "diiChange": None,
+            "publicHolding": None,
+            "quarterlyEps": [],
+            "epsLast4Qtrs": [],
+            "source": "Screener",
+            # Historical PE median comparison
+            "peMedian1Y": None,
+            "peMedian3Y": None,
+            "peMedian5Y": None,
+            "belowMedian1Y": None,
+            "belowMedian3Y": None,
+            "belowMedian5Y": None,
         }
-        return self.supportResistance
-    
-    def get_full_financials(self, driver):
-        # This grabs ALL tables on the page as DataFrames
-        tables = pd.read_html(driver.page_source)
+
+        # 1. Fetch Fundamentals from Screener
+        screener_data = self._fetch_from_screener(target_stock)
+        if screener_data:
+            result.update(screener_data)
+
+        # 2. Fetch / Fallback & Technicals (RSI, PE, D/E) via yfinance / Database
+        yf_data = self._fetch_from_yfinance(target_stock)
+        if yf_data:
+            for k, v in yf_data.items():
+                if result.get(k) is None or result.get(k) == 0:
+                    result[k] = v
+
+        # 3. Compute historical median PE (1yr, 3yr, 5yr) for valuation signal
+        pe_medians = self._fetch_historical_pe_medians(target_stock)
+        result.update(pe_medians)
+
+        # Format EPS for convenient frontend consumption
+        if result.get("quarterlyEps") and not result.get("epsLast4Qtrs"):
+            result["epsLast4Qtrs"] = [item["eps"] for item in result["quarterlyEps"]]
+
+        return result
+
+    def _fetch_from_screener(self, stock: str) -> dict:
+        """
+        Scrapes key ratios, quarterly results, and shareholding pattern from Screener.in.
+        """
+        urls = [
+            f"https://www.screener.in/company/{stock}/consolidated/",
+            f"https://www.screener.in/company/{stock}/"
+        ]
         
-        # Usually:
-        # tables[0] = Peer Comparison
-        # tables[1] = Quarterly Results
-        # tables[2] = Profit & Loss
-        # tables[3] = Balance Sheet
-        
-        quarterly_results = tables[1]
-        return quarterly_results
-    
-    def analyze_quarterly_results(self, quarterly_df):
-        try:
-            quarterly_df = quarterly_df.set_index(quarterly_df.columns[0]).T           
-            quarterly_df.columns = quarterly_df.columns.str.replace(r'[\xa0+]', '', regex=True).str.strip()
-            print(f"DEBUG: Cleaned Columns -> {quarterly_df.columns.tolist()}") 
-            for col in quarterly_df.columns:
-                series = quarterly_df[col].astype(str).str.replace(',', '').str.replace('%', '')
-                quarterly_df[col] = pd.to_numeric(series, errors='coerce')
-            target_col = None
-            possible_names = ['Sales', 'Revenue', 'Interest Earned', 'Total Income']
-            for name in possible_names:
-                if name in quarterly_df.columns:
-                    target_col = name
+        soup = None
+        for url in urls:
+            try:
+                resp = requests.get(url, headers=self.headers, timeout=6)
+                if resp.status_code == 200 and "Company not found" not in resp.text:
+                    soup = BeautifulSoup(resp.content, "html.parser")
                     break
-            if not target_col:
-                return {"Error": f"Could not find Top Line. Available: {list(quarterly_df.columns)}"}
-            # 4. PERFORM ANALYSIS (Using the found column)
-            recent_data = quarterly_df.tail(5)
-            latest_q = recent_data.iloc[-1]
-            last_year_q = recent_data.iloc[-5]
-            sales_yoy = ((latest_q[target_col] - last_year_q[target_col]) / last_year_q[target_col]) * 100
-            np_yoy = ((latest_q['Net Profit'] - last_year_q['Net Profit']) / last_year_q['Net Profit']) * 100
-            # Handle OPM (It might be missing for Banks)
-            opm = f"{latest_q.get('OPM', 'N/A')}%"
+            except Exception as e:
+                continue
 
-            return {
-                "Metric Used": target_col,
-                "Latest Quarter": recent_data.index[-1],
-                "Top-Line Growth (YoY)": f"{sales_yoy:.2f}%",
-                "Net Profit Growth (YoY)": f"{np_yoy:.2f}%",
-                "Margins": opm
-            }
+        if not soup:
+            return {}
+
+        data = {}
+
+        try:
+            # 1. Company Name
+            h1 = soup.find("h1", class_="h2") or soup.find("h1")
+            if h1:
+                data["companyName"] = h1.get_text(strip=True)
+
+            # 2. Top Ratios (P/E, Market Cap, Debt to Equity, ROCE, ROE)
+            top_ratios = soup.find("ul", id="top-ratios")
+            if top_ratios:
+                for item in top_ratios.find_all("li"):
+                    name_span = item.find("span", class_="name")
+                    val_span = item.find("span", class_="value") or item.find("span", class_="nowrap")
+                    if name_span and val_span:
+                        name = name_span.get_text(strip=True).lower()
+                        val_txt = val_span.get_text(strip=True).replace(",", "")
+                        
+                        # Extract numerical value
+                        num_match = re.search(r"[-+]?\d*\.?\d+", val_txt)
+                        num_val = float(num_match.group()) if num_match else None
+
+                        if "stock p/e" in name or name == "p/e":
+                            data["peRatio"] = num_val
+                        elif "debt to equity" in name:
+                            data["debtToEquity"] = num_val
+                        elif "current price" in name:
+                            data["currentPrice"] = num_val
+                        elif "market cap" in name:
+                            data["marketCap"] = num_val
+                        elif "roce" in name:
+                            data["roce"] = num_val
+                        elif "roe" in name:
+                            data["roe"] = num_val
+
+            # 3. Quarterly EPS (Quarterly Results Table)
+            quarterly_sec = soup.find("section", id="quarters")
+            if quarterly_sec:
+                table = quarterly_sec.find("table", class_="data-table")
+                if table:
+                    headers = [th.get_text(strip=True) for th in table.find("thead").find_all("th")]
+                    quarter_names = headers[1:] if len(headers) > 1 else []
+                    
+                    eps_row = None
+                    for tr in table.find("tbody").find_all("tr"):
+                        tds = tr.find_all("td")
+                        if tds and "eps in rs" in tds[0].get_text(strip=True).lower():
+                            eps_row = [td.get_text(strip=True).replace(",", "") for td in tds[1:]]
+                            break
+
+                    if eps_row and quarter_names:
+                        quarterly_eps = []
+                        for q_name, eps_str in zip(quarter_names, eps_row):
+                            try:
+                                val = float(eps_str)
+                                quarterly_eps.append({"quarter": q_name, "eps": val})
+                            except ValueError:
+                                continue
+                        
+                        # Keep last 4 quarters
+                        last_4 = quarterly_eps[-4:] if len(quarterly_eps) >= 4 else quarterly_eps
+                        data["quarterlyEps"] = last_4
+                        data["epsLast4Qtrs"] = [item["eps"] for item in last_4]
+
+            # 4. Shareholding Pattern (Promoter, FII, DII QoQ Changes)
+            shareholding_sec = soup.find("section", id="shareholding")
+            if shareholding_sec:
+                table = shareholding_sec.find("table", class_="data-table")
+                if table:
+                    for tr in table.find("tbody").find_all("tr"):
+                        tds = tr.find_all("td")
+                        if len(tds) >= 3:
+                            holder_name = tds[0].get_text(strip=True)
+                            
+                            def parse_pct(txt):
+                                clean = txt.replace("%", "").replace(",", "").strip()
+                                try:
+                                    return float(clean)
+                                except ValueError:
+                                    return 0.0
+
+                            latest_val = parse_pct(tds[-1].get_text(strip=True))
+                            prev_val = parse_pct(tds[-2].get_text(strip=True))
+                            diff = round(latest_val - prev_val, 2)
+                            
+                            if "promoter" in holder_name.lower():
+                                data["promoterHolding"] = latest_val
+                                data["promoterChange"] = diff
+                            elif "fii" in holder_name.lower():
+                                data["fiiHolding"] = latest_val
+                                data["fiiChange"] = diff
+                            elif "dii" in holder_name.lower():
+                                data["diiHolding"] = latest_val
+                                data["diiChange"] = diff
+                            elif "public" in holder_name.lower():
+                                data["publicHolding"] = latest_val
 
         except Exception as e:
-            return {"Error": f"Analysis Failed: {str(e)}"}
+            print(f"Error parsing screener data for {stock}: {e}")
 
-# Example Usage
-if __name__ == "__main__":
-    # Note: Ensure applicationConfig has openBrowser = True/False
-    analyzer = AnalyseStock("RELIANCE") 
-    
-    # Example Technicals
-    prices = [2400, 2420, 2380, 2390, 2410, 2450, 2460, 2480, 2500, 2510, 2530, 2550, 2580, 2600, 2620]
-    print(f"RSI: {analyzer.calculateRsi(prices)}")
-    print(f"Fibonacci: {analyzer.calculateFibonacciLevels(2620, 2400)}")
-    print(f"S/R Levels: {analyzer.calculateSupportResistance(prices)}")
+        return data
+
+    def _fetch_from_yfinance(self, stock: str) -> dict:
+        """
+        Fetches PE, D/E, market prices, and calculates 14-period RSI using yfinance.
+        """
+        data = {}
+        for suffix in [".NS", ".BO"]:
+            ticker_symbol = f"{stock}{suffix}"
+            try:
+                ticker = yf.Ticker(ticker_symbol)
+                
+                # Fetch info
+                info = ticker.info
+                if info and isinstance(info, dict):
+                    if not data.get("peRatio"):
+                        data["peRatio"] = info.get("trailingPE") or info.get("forwardPE")
+                        if data["peRatio"]:
+                            data["peRatio"] = round(float(data["peRatio"]), 2)
+                            
+                    if not data.get("debtToEquity"):
+                        de = info.get("debtToEquity")
+                        if de is not None:
+                            # yfinance returns debtToEquity as % (e.g. 45.2 -> 0.45 or 45.2)
+                            data["debtToEquity"] = round(float(de) / 100.0, 2) if float(de) > 5.0 else round(float(de), 2)
+                            
+                    if not data.get("currentPrice"):
+                        data["currentPrice"] = info.get("currentPrice") or info.get("regularMarketPrice")
+                    if not data.get("marketCap"):
+                        data["marketCap"] = info.get("marketCap")
+                        
+                # Calculate RSI using recent price history
+                hist = ticker.history(period="3mo")
+                if hist is not None and not hist.empty and len(hist) >= 15:
+                    closes = hist["Close"].tolist()
+                    rsi_val = financialMath.calculate_rsi(closes, period=14)
+                    if rsi_val is not None:
+                        data["rsi"] = rsi_val
+
+                if data.get("peRatio") or data.get("rsi"):
+                    break
+            except Exception as e:
+                continue
+
+        return data
+
+    def _fetch_historical_pe_medians(self, stock: str) -> dict:
+        """
+        Fetches 1Y, 3Y, and 5Y Median PE values directly from Screener's chart API
+        (same values shown below the PE chart on screener.in).
+        Also extracts current PE from the weekly PE time-series.
+        """
+        result = {
+            "peMedian1Y": None,
+            "peMedian3Y": None,
+            "peMedian5Y": None,
+            "belowMedian1Y": None,
+            "belowMedian3Y": None,
+            "belowMedian5Y": None,
+        }
+        try:
+            import urllib.parse
+
+            # Step 1: Resolve company ID from Screener search API
+            search_url = f"https://www.screener.in/api/company/search/?q={urllib.parse.quote(stock)}"
+            search_resp = requests.get(search_url, headers=self.headers, timeout=6)
+            if search_resp.status_code != 200:
+                return result
+
+            search_data = search_resp.json()
+            if not search_data:
+                return result
+
+            company_id = search_data[0].get("id")
+            if not company_id:
+                return result
+
+            # Step 2: Determine if consolidated or standalone
+            company_url = search_data[0].get("url", "")
+            is_consolidated = "consolidated" in company_url
+
+            # Step 3: Fetch median PE for each time window from Screener chart API
+            q_param = urllib.parse.quote("Price to Earning-Median PE-EPS")
+            medians = {}
+            current_pe_from_chart = None
+
+            for days, key in [(365, "1Y"), (1095, "3Y"), (1825, "5Y")]:
+                consolidated_param = "&consolidated=true" if is_consolidated else ""
+                chart_url = (
+                    f"https://www.screener.in/api/company/{company_id}/chart/"
+                    f"?q={q_param}&days={days}{consolidated_param}"
+                )
+                try:
+                    chart_resp = requests.get(chart_url, headers={
+                        **self.headers,
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Accept": "application/json, */*",
+                        "Referer": f"https://www.screener.in/company/{stock}/",
+                    }, timeout=6)
+
+                    if chart_resp.status_code != 200:
+                        continue
+
+                    chart_data = chart_resp.json()
+                    datasets = chart_data.get("datasets", [])
+
+                    for ds in datasets:
+                        metric = ds.get("metric", "").lower()
+                        label = ds.get("label", "").lower()
+                        values = ds.get("values", [])
+
+                        # Extract the Median PE flat line value
+                        if "median" in metric or "median" in label:
+                            if values:
+                                try:
+                                    medians[key] = round(float(values[0][1]), 2)
+                                except (ValueError, TypeError, IndexError):
+                                    pass
+
+                        # Extract the most recent actual PE (only need to do this once)
+                        if current_pe_from_chart is None and "price to earning" in metric and values:
+                            try:
+                                current_pe_from_chart = round(float(values[-1][1]), 2)
+                            except (ValueError, TypeError, IndexError):
+                                pass
+
+                except Exception:
+                    continue
+
+            result["peMedian1Y"] = medians.get("1Y")
+            result["peMedian3Y"] = medians.get("3Y")
+            result["peMedian5Y"] = medians.get("5Y")
+
+            # Use Screener's actual current PE for comparison (more accurate TTM-based)
+            compare_pe = current_pe_from_chart
+            if compare_pe is None:
+                # Fall back to whatever screener/yfinance returned in the main result
+                compare_pe = None
+
+            if compare_pe is not None:
+                result["belowMedian1Y"] = bool(compare_pe < medians["1Y"]) if medians.get("1Y") else None
+                result["belowMedian3Y"] = bool(compare_pe < medians["3Y"]) if medians.get("3Y") else None
+                result["belowMedian5Y"] = bool(compare_pe < medians["5Y"]) if medians.get("5Y") else None
+
+        except Exception as e:
+            print(f"Error fetching PE medians from Screener for {stock}: {e}")
+
+        return result

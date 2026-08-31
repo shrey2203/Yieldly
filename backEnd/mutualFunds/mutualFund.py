@@ -7,6 +7,7 @@ from dataQuery.mutualFundDayWisePositionQuery import MutualFundDayWisePosition
 from sqlalchemy import desc
 from dataQuery.mutualFundMasterQuery import MutualFundMaster
 import state
+import financialMath
 
 
 class MutualFund:
@@ -170,22 +171,16 @@ class MutualFund:
         return self._investments
     
     def getAbsPNLPercentage(self):
-        pnl = self.getProfitLoss()
-        totalInvestment = self.getTotalInvestment()
-        if totalInvestment == 0: return 0
-        return pnl/ totalInvestment * 100
+        return financialMath.calculate_abs_return(self.getProfitLoss(), self.getTotalInvestment())
     
     def getMaxHoldingDays(self):
         return max((inv.getHoldingDays() for inv in self._investments), default=0)
     
     def getCAGR(self):
-        if self.getMaxHoldingDays() == 0: return 0
-        oneByTime = 365/self.getMaxHoldingDays()
-        return ((self.getTotalCurrentValue()/ self.getTotalInvestment())**(oneByTime) - 1)*100
-    
+        return financialMath.calculate_cagr(self.getTotalInvestment(), self.getTotalCurrentValue(), self.getMaxHoldingDays())
 
     def getXIRR(self, asOfDate=None):
-        if not self._investments or self.getMaxHoldingDays() == 0:
+        if not self._investments:
             return 0.0
         
         currentVal = self.getTotalCurrentValue()
@@ -195,90 +190,19 @@ class MutualFund:
             return 0.0
 
         # Build raw date & cashflow pairs (negative for purchases)
-        raw_entries = []
+        cashflows = []
         for inv in self._investments:
             cost = inv.getInvestValue() + inv.getStampDuty()
             if cost > 0:
-                t_date = inv.getTransactDate()
-                t_date = t_date.date() if hasattr(t_date, 'date') else t_date
-                raw_entries.append((t_date, -float(cost)))
+                cashflows.append((inv.getTransactDate(), -float(cost)))
 
-        if not raw_entries:
+        if not cashflows:
             return 0.0
 
-        # Valuation date & cashflow (positive for terminal value)
         eval_date = asOfDate if asOfDate else date.today()
-        eval_date = eval_date.date() if hasattr(eval_date, 'date') else eval_date
-        raw_entries.append((eval_date, float(currentVal)))
+        cashflows.append((eval_date, float(currentVal)))
 
-        # 1. Sort chronologically so t0 is always the earliest investment
-        raw_entries.sort(key=lambda x: x[0])
-        
-        dates = [entry[0] for entry in raw_entries]
-        cashflows = [entry[1] for entry in raw_entries]
-
-        d0 = dates[0]
-        total_days = (dates[-1] - d0).days
-        if total_days <= 0:
-            return 0.0
-
-        # Time fractions in years: (d_i - d_0) / 365.0
-        times = [(d - d0).days / 365.0 for d in dates]
-
-        def npv(rate):
-            if rate <= -0.999999:
-                return float('inf')
-            return sum(cf / ((1.0 + rate) ** t) for cf, t in zip(cashflows, times))
-
-        def d_npv(rate):
-            if rate <= -0.999999:
-                return float('inf')
-            return sum(-cf * t / ((1.0 + rate) ** (t + 1.0)) for cf, t in zip(cashflows, times))
-
-        # 2. Try Newton-Raphson with multiple starting guesses
-        for start_rate in [0.10, 0.0, 0.25, -0.10, 0.50, -0.30]:
-            rate = start_rate
-            for _ in range(100):
-                f = npv(rate)
-                df = d_npv(rate)
-
-                if abs(df) < 1e-12:
-                    break
-
-                new_rate = rate - f / df
-                new_rate = min(max(new_rate, -0.999), 10.0)
-
-                if abs(new_rate - rate) < 1e-7 and abs(f) < 1e-3:
-                    return round(new_rate * 100.0, 2)
-
-                rate = new_rate
-
-        # 3. Fallback: Bisection root finder across [-0.999, 10.0]
-        low = -0.999
-        high = 10.0
-        f_low = npv(low)
-        f_high = npv(high)
-
-        if f_low * f_high <= 0:
-            for _ in range(100):
-                mid = (low + high) / 2.0
-                f_mid = npv(mid)
-
-                if abs(f_mid) < 1e-4 or (high - low) < 1e-6:
-                    return round(mid * 100.0, 2)
-
-                if f_low * f_mid <= 0:
-                    high = mid
-                    f_high = f_mid
-                else:
-                    low = mid
-                    f_low = f_mid
-
-        # 4. Safe fallback: return CAGR if XIRR cannot be determined
-        try:
-            return round(self.getCAGR(), 2)
-        except Exception:
-            return 0.0
+        return financialMath.calculate_xirr(cashflows, as_of_date=eval_date, fallback_cagr=True)
 
     
     def to_dict(self, userId, asOfDate):
