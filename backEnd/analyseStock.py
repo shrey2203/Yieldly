@@ -1,25 +1,41 @@
 """
-Stock Analysis Engine for Fundamental & Technical Metrics.
-Fetches and calculates:
-- Stock P/E Ratio
-- Quarterly EPS for the last 4 quarters
-- Promoter, FII, and DII Holdings and QoQ Changes
-- 14-period Relative Strength Index (RSI)
-- Debt to Equity (D/E) Ratio
-- Market Cap, Current Price, ROCE, and ROE
+Stock Analysis Engine Coordinator
+---------------------------------
+Lightweight facade coordinating:
+1. Fundamental Analysis Service (Screener.in, yfinance, median P/E, 4-point rating)
+2. Technical Analysis Service (S/R pivot detection, Robust Volume Profile POC)
+3. Quantitative Strategy Engine (Plug-and-play strategies via StrategyRegistry)
 """
 
-import re
+import time
+import math
 import requests
-import pandas as pd
-import numpy as np
-import yfinance as yf
-from datetime import datetime, date
-from bs4 import BeautifulSoup
-import financialMath
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
+from typing import Dict, Any, Optional
+
+from services.fundamental_analysis import FundamentalAnalysisService
+from services.technical_analysis import TechnicalAnalysisService
+from strategies.strategy_registry import StrategyRegistry
+from strategies.base_strategy import download_stock_history
 
 
 class AnalyseStock:
+    _session = None
+    _cache = {}
+    _CACHE_TTL_SECONDS = 3600  # 1 hour
+
+    @classmethod
+    def get_session(cls):
+        if cls._session is None:
+            s = requests.Session()
+            retries = Retry(total=3, backoff_factor=0.3, status_forcelist=[500, 502, 503, 504])
+            adapter = HTTPAdapter(pool_connections=20, pool_maxsize=20, max_retries=retries)
+            s.mount("http://", adapter)
+            s.mount("https://", adapter)
+            cls._session = s
+        return cls._session
+
     def __init__(self, stock: str):
         self.stock = stock.strip().upper()
         self.headers = {
@@ -27,13 +43,21 @@ class AnalyseStock:
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
         }
+        self.session = self.get_session()
 
     def fetchStockAnalysisData(self, stock: str = None) -> dict:
         """
-        Main entrypoint to fetch comprehensive fundamental and technical metrics for a stock.
+        Fetches comprehensive fundamental and technical metrics for a stock.
         """
         target_stock = (stock or self.stock).strip().upper()
         
+        # Check in-memory cache (1 hour TTL)
+        now = time.time()
+        if target_stock in self._cache:
+            cached_time, cached_data = self._cache[target_stock]
+            if now - cached_time < self._CACHE_TTL_SECONDS:
+                return dict(cached_data)
+
         result = {
             "stock": target_stock,
             "companyName": target_stock,
@@ -48,310 +72,126 @@ class AnalyseStock:
             "promoterChange": None,
             "fiiHolding": None,
             "fiiChange": None,
+            "fiiHistory": [],
             "diiHolding": None,
             "diiChange": None,
+            "diiHistory": [],
             "publicHolding": None,
+            "publicHistory": [],
             "quarterlyEps": [],
             "epsLast4Qtrs": [],
             "source": "Screener",
-            # Historical PE median comparison
             "peMedian1Y": None,
             "peMedian3Y": None,
             "peMedian5Y": None,
             "belowMedian1Y": None,
             "belowMedian3Y": None,
             "belowMedian5Y": None,
+            "supports": [],
+            "resistances": [],
+            "distanceToSupport1Pct": None,
+            "distanceToResistance1Pct": None,
+            "poc": None,
+            "signalData": {},
         }
 
-        # 1. Fetch Fundamentals from Screener
-        screener_data = self._fetch_from_screener(target_stock)
+        # 1. Fundamentals from Screener.in
+        screener_data = FundamentalAnalysisService.fetch_from_screener(target_stock, self.session, self.headers)
         if screener_data:
             result.update(screener_data)
 
-        # 2. Fetch / Fallback & Technicals (RSI, PE, D/E) via yfinance / Database
-        yf_data = self._fetch_from_yfinance(target_stock)
+        # 2. Fallbacks & RSI from yfinance
+        yf_data = FundamentalAnalysisService.fetch_from_yfinance(target_stock)
         if yf_data:
             for k, v in yf_data.items():
                 if result.get(k) is None or result.get(k) == 0:
                     result[k] = v
 
-        # 3. Compute historical median PE (1yr, 3yr, 5yr) for valuation signal
-        pe_medians = self._fetch_historical_pe_medians(target_stock)
+        # 3. Historical Median PE comparison
+        company_id = result.pop("_companyId", None)
+        is_consolidated = result.pop("_isConsolidated", True)
+        current_pe = result.get("peRatio")
+        pe_medians = FundamentalAnalysisService.fetch_historical_pe_medians(
+            target_stock,
+            session=self.session,
+            headers=self.headers,
+            current_pe=current_pe,
+            company_id=company_id,
+            is_consolidated=is_consolidated
+        )
         result.update(pe_medians)
 
-        # Format EPS for convenient frontend consumption
+        # 4. Format EPS
         if result.get("quarterlyEps") and not result.get("epsLast4Qtrs"):
             result["epsLast4Qtrs"] = [item["eps"] for item in result["quarterlyEps"]]
 
-        return result
+        # 5. 4-Point Health Rating Scorecard
+        rating_data = FundamentalAnalysisService.calculate_stock_rating(result)
+        result.update(rating_data)
 
-    def _fetch_from_screener(self, stock: str) -> dict:
-        """
-        Scrapes key ratios, quarterly results, and shareholding pattern from Screener.in.
-        """
-        urls = [
-            f"https://www.screener.in/company/{stock}/consolidated/",
-            f"https://www.screener.in/company/{stock}/"
-        ]
-        
-        soup = None
-        for url in urls:
+        # 6. Technical Support & Resistance + Robust Volume POC
+        sr_data = TechnicalAnalysisService.calculate_support_resistance(target_stock, result.get("currentPrice"))
+        result.update(sr_data)
+
+        # 7. Generate Live Strategy Signals for all registered strategies
+        df_history = download_stock_history(target_stock, lookback_years=1, min_bars=30)
+        strategy_signals = {}
+        for strat in StrategyRegistry.get_all_strategies():
             try:
-                resp = requests.get(url, headers=self.headers, timeout=6)
-                if resp.status_code == 200 and "Company not found" not in resp.text:
-                    soup = BeautifulSoup(resp.content, "html.parser")
-                    break
-            except Exception as e:
-                continue
-
-        if not soup:
-            return {}
-
-        data = {}
-
-        try:
-            # 1. Company Name
-            h1 = soup.find("h1", class_="h2") or soup.find("h1")
-            if h1:
-                data["companyName"] = h1.get_text(strip=True)
-
-            # 2. Top Ratios (P/E, Market Cap, Debt to Equity, ROCE, ROE)
-            top_ratios = soup.find("ul", id="top-ratios")
-            if top_ratios:
-                for item in top_ratios.find_all("li"):
-                    name_span = item.find("span", class_="name")
-                    val_span = item.find("span", class_="value") or item.find("span", class_="nowrap")
-                    if name_span and val_span:
-                        name = name_span.get_text(strip=True).lower()
-                        val_txt = val_span.get_text(strip=True).replace(",", "")
-                        
-                        # Extract numerical value
-                        num_match = re.search(r"[-+]?\d*\.?\d+", val_txt)
-                        num_val = float(num_match.group()) if num_match else None
-
-                        if "stock p/e" in name or name == "p/e":
-                            data["peRatio"] = num_val
-                        elif "debt to equity" in name:
-                            data["debtToEquity"] = num_val
-                        elif "current price" in name:
-                            data["currentPrice"] = num_val
-                        elif "market cap" in name:
-                            data["marketCap"] = num_val
-                        elif "roce" in name:
-                            data["roce"] = num_val
-                        elif "roe" in name:
-                            data["roe"] = num_val
-
-            # 3. Quarterly EPS (Quarterly Results Table)
-            quarterly_sec = soup.find("section", id="quarters")
-            if quarterly_sec:
-                table = quarterly_sec.find("table", class_="data-table")
-                if table:
-                    headers = [th.get_text(strip=True) for th in table.find("thead").find_all("th")]
-                    quarter_names = headers[1:] if len(headers) > 1 else []
-                    
-                    eps_row = None
-                    for tr in table.find("tbody").find_all("tr"):
-                        tds = tr.find_all("td")
-                        if tds and "eps in rs" in tds[0].get_text(strip=True).lower():
-                            eps_row = [td.get_text(strip=True).replace(",", "") for td in tds[1:]]
-                            break
-
-                    if eps_row and quarter_names:
-                        quarterly_eps = []
-                        for q_name, eps_str in zip(quarter_names, eps_row):
-                            try:
-                                val = float(eps_str)
-                                quarterly_eps.append({"quarter": q_name, "eps": val})
-                            except ValueError:
-                                continue
-                        
-                        # Keep last 4 quarters
-                        last_4 = quarterly_eps[-4:] if len(quarterly_eps) >= 4 else quarterly_eps
-                        data["quarterlyEps"] = last_4
-                        data["epsLast4Qtrs"] = [item["eps"] for item in last_4]
-
-            # 4. Shareholding Pattern (Promoter, FII, DII QoQ Changes)
-            shareholding_sec = soup.find("section", id="shareholding")
-            if shareholding_sec:
-                table = shareholding_sec.find("table", class_="data-table")
-                if table:
-                    for tr in table.find("tbody").find_all("tr"):
-                        tds = tr.find_all("td")
-                        if len(tds) >= 3:
-                            holder_name = tds[0].get_text(strip=True)
-                            
-                            def parse_pct(txt):
-                                clean = txt.replace("%", "").replace(",", "").strip()
-                                try:
-                                    return float(clean)
-                                except ValueError:
-                                    return 0.0
-
-                            latest_val = parse_pct(tds[-1].get_text(strip=True))
-                            prev_val = parse_pct(tds[-2].get_text(strip=True))
-                            diff = round(latest_val - prev_val, 2)
-                            
-                            if "promoter" in holder_name.lower():
-                                data["promoterHolding"] = latest_val
-                                data["promoterChange"] = diff
-                            elif "fii" in holder_name.lower():
-                                data["fiiHolding"] = latest_val
-                                data["fiiChange"] = diff
-                            elif "dii" in holder_name.lower():
-                                data["diiHolding"] = latest_val
-                                data["diiChange"] = diff
-                            elif "public" in holder_name.lower():
-                                data["publicHolding"] = latest_val
-
-        except Exception as e:
-            print(f"Error parsing screener data for {stock}: {e}")
-
-        return data
-
-    def _fetch_from_yfinance(self, stock: str) -> dict:
-        """
-        Fetches PE, D/E, market prices, and calculates 14-period RSI using yfinance.
-        """
-        data = {}
-        for suffix in [".NS", ".BO"]:
-            ticker_symbol = f"{stock}{suffix}"
-            try:
-                ticker = yf.Ticker(ticker_symbol)
-                
-                # Fetch info
-                info = ticker.info
-                if info and isinstance(info, dict):
-                    if not data.get("peRatio"):
-                        data["peRatio"] = info.get("trailingPE") or info.get("forwardPE")
-                        if data["peRatio"]:
-                            data["peRatio"] = round(float(data["peRatio"]), 2)
-                            
-                    if not data.get("debtToEquity"):
-                        de = info.get("debtToEquity")
-                        if de is not None:
-                            # yfinance returns debtToEquity as % (e.g. 45.2 -> 0.45 or 45.2)
-                            data["debtToEquity"] = round(float(de) / 100.0, 2) if float(de) > 5.0 else round(float(de), 2)
-                            
-                    if not data.get("currentPrice"):
-                        data["currentPrice"] = info.get("currentPrice") or info.get("regularMarketPrice")
-                    if not data.get("marketCap"):
-                        data["marketCap"] = info.get("marketCap")
-                        
-                # Calculate RSI using recent price history
-                hist = ticker.history(period="3mo")
-                if hist is not None and not hist.empty and len(hist) >= 15:
-                    closes = hist["Close"].tolist()
-                    rsi_val = financialMath.calculate_rsi(closes, period=14)
-                    if rsi_val is not None:
-                        data["rsi"] = rsi_val
-
-                if data.get("peRatio") or data.get("rsi"):
-                    break
-            except Exception as e:
-                continue
-
-        return data
-
-    def _fetch_historical_pe_medians(self, stock: str) -> dict:
-        """
-        Fetches 1Y, 3Y, and 5Y Median PE values directly from Screener's chart API
-        (same values shown below the PE chart on screener.in).
-        Also extracts current PE from the weekly PE time-series.
-        """
-        result = {
-            "peMedian1Y": None,
-            "peMedian3Y": None,
-            "peMedian5Y": None,
-            "belowMedian1Y": None,
-            "belowMedian3Y": None,
-            "belowMedian5Y": None,
-        }
-        try:
-            import urllib.parse
-
-            # Step 1: Resolve company ID from Screener search API
-            search_url = f"https://www.screener.in/api/company/search/?q={urllib.parse.quote(stock)}"
-            search_resp = requests.get(search_url, headers=self.headers, timeout=6)
-            if search_resp.status_code != 200:
-                return result
-
-            search_data = search_resp.json()
-            if not search_data:
-                return result
-
-            company_id = search_data[0].get("id")
-            if not company_id:
-                return result
-
-            # Step 2: Determine if consolidated or standalone
-            company_url = search_data[0].get("url", "")
-            is_consolidated = "consolidated" in company_url
-
-            # Step 3: Fetch median PE for each time window from Screener chart API
-            q_param = urllib.parse.quote("Price to Earning-Median PE-EPS")
-            medians = {}
-            current_pe_from_chart = None
-
-            for days, key in [(365, "1Y"), (1095, "3Y"), (1825, "5Y")]:
-                consolidated_param = "&consolidated=true" if is_consolidated else ""
-                chart_url = (
-                    f"https://www.screener.in/api/company/{company_id}/chart/"
-                    f"?q={q_param}&days={days}{consolidated_param}"
+                sig = strat.generate_signal(
+                    df=df_history,
+                    current_price=result.get("currentPrice"),
+                    supports=result.get("supports", []),
+                    resistances=result.get("resistances", []),
+                    poc=result.get("poc"),
+                    rsi=result.get("rsi")
                 )
-                try:
-                    chart_resp = requests.get(chart_url, headers={
-                        **self.headers,
-                        "X-Requested-With": "XMLHttpRequest",
-                        "Accept": "application/json, */*",
-                        "Referer": f"https://www.screener.in/company/{stock}/",
-                    }, timeout=6)
+                strategy_signals[strat.ID] = sig
+            except Exception as e:
+                print(f"Error generating signal for strategy {strat.ID}: {e}")
 
-                    if chart_resp.status_code != 200:
-                        continue
+        result["strategySignals"] = strategy_signals
+        result["signalData"] = strategy_signals.get("sr_poc") or (next(iter(strategy_signals.values())) if strategy_signals else {})
 
-                    chart_data = chart_resp.json()
-                    datasets = chart_data.get("datasets", [])
+        # 8. Sanitize NaN/Inf for valid RFC 8259 JSON
+        result = self._sanitize_for_json(result)
 
-                    for ds in datasets:
-                        metric = ds.get("metric", "").lower()
-                        label = ds.get("label", "").lower()
-                        values = ds.get("values", [])
-
-                        # Extract the Median PE flat line value
-                        if "median" in metric or "median" in label:
-                            if values:
-                                try:
-                                    medians[key] = round(float(values[0][1]), 2)
-                                except (ValueError, TypeError, IndexError):
-                                    pass
-
-                        # Extract the most recent actual PE (only need to do this once)
-                        if current_pe_from_chart is None and "price to earning" in metric and values:
-                            try:
-                                current_pe_from_chart = round(float(values[-1][1]), 2)
-                            except (ValueError, TypeError, IndexError):
-                                pass
-
-                except Exception:
-                    continue
-
-            result["peMedian1Y"] = medians.get("1Y")
-            result["peMedian3Y"] = medians.get("3Y")
-            result["peMedian5Y"] = medians.get("5Y")
-
-            # Use Screener's actual current PE for comparison (more accurate TTM-based)
-            compare_pe = current_pe_from_chart
-            if compare_pe is None:
-                # Fall back to whatever screener/yfinance returned in the main result
-                compare_pe = None
-
-            if compare_pe is not None:
-                result["belowMedian1Y"] = bool(compare_pe < medians["1Y"]) if medians.get("1Y") else None
-                result["belowMedian3Y"] = bool(compare_pe < medians["3Y"]) if medians.get("3Y") else None
-                result["belowMedian5Y"] = bool(compare_pe < medians["5Y"]) if medians.get("5Y") else None
-
-        except Exception as e:
-            print(f"Error fetching PE medians from Screener for {stock}: {e}")
-
+        # Store in cache
+        self._cache[target_stock] = (now, dict(result))
         return result
+
+    @classmethod
+    def run_backtest_strategy(cls, stock: str, lookback_years: int = 2, strategy_id: str = "sr_poc", initial_capital: float = 100000.0) -> dict:
+        """
+        Dispatches backtest execution via the StrategyRegistry.
+        """
+        res = StrategyRegistry.run_backtest(
+            strategy_id=strategy_id,
+            stock=stock,
+            lookback_years=lookback_years,
+            initial_capital=initial_capital
+        )
+        return cls._sanitize_for_json(res)
+
+    @staticmethod
+    def _sanitize_for_json(data):
+        """
+        Recursively sanitizes NaN and Inf floats into None for clean JSON serialization.
+        """
+        if isinstance(data, dict):
+            return {k: AnalyseStock._sanitize_for_json(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [AnalyseStock._sanitize_for_json(item) for item in data]
+        elif isinstance(data, float):
+            if math.isnan(data) or math.isinf(data):
+                return None
+            return data
+        elif hasattr(data, "item") and callable(getattr(data, "item")):
+            try:
+                val = data.item()
+                if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+                    return None
+                return val
+            except Exception:
+                return data
+        return data

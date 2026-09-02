@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AllCommunityModule, ModuleRegistry, ClientSideRowModelModule } from "ag-grid-community";
 import PortfolioUI from "./portfolioUI"; 
 import "./Portfolio.css";
@@ -6,6 +7,8 @@ import "./Portfolio.css";
 ModuleRegistry.registerModules([ClientSideRowModelModule, AllCommunityModule]);
 
 const Portfolio = () => {
+    const [searchParams] = useSearchParams();
+    const tabParam = searchParams.get('tab');
     const [portfolioData, setPortfolioData] = useState([]);
     const [chartData, setChartData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -18,7 +21,7 @@ const Portfolio = () => {
     const gridRef = useRef(); 
     const [modalOpen, setModalOpen] = useState(false);
     const [selectedRowData, setSelectedRowData] = useState(null);
-    const [viewTab, setViewTab] = useState('holdings'); 
+    const [viewTab, setViewTab] = useState(tabParam === 'dividends' ? 'dividends' : 'holdings'); 
     const [activeTab, setActiveTab] = useState('transactions');
     const [scripHistory, setScripHistory] = useState([]);
     const [isHistoryLoading, setIsHistoryLoading] = useState(false);
@@ -26,6 +29,39 @@ const Portfolio = () => {
     const [dividendData, setDividendData] = useState([]);
     const [totalDividends, setTotalDividends] = useState(0);
     const [dividendsList, setDividendsList] = useState([]);
+
+    const fetchTotalDividends = useCallback(async () => {
+        const activeUser = (userId && userId !== "null" && userId !== "undefined") ? userId : (localStorage.getItem("username") || "SHREY");
+        try {
+            const token = localStorage.getItem("token");
+            const response = await fetch(
+                `/api/fetchTotalDividends?userId=${encodeURIComponent(activeUser)}`, 
+                {headers: token ? { 'Authorization': `${token}` } : {}}
+            );
+            if (!response.ok) throw new Error("Network response was not ok");
+            const data = await response.json();
+            setTotalDividends(data.totalDividends || 0);
+            setDividendsList(data.dividendsList || []);
+        } catch (err) {
+            console.error("Error fetching total dividends:", err);
+            setTotalDividends(0);
+            setDividendsList([]);
+        }
+    }, [userId]);
+
+    useEffect(() => {
+        if (tabParam === 'dividends') {
+            setViewTab('dividends');
+            fetchTotalDividends();
+        }
+    }, [tabParam, fetchTotalDividends]);
+
+    useEffect(() => {
+        if (viewTab === 'dividends' && dividendsList.length === 0) {
+            fetchTotalDividends();
+        }
+    }, [viewTab, dividendsList.length, fetchTotalDividends]);
+
     useEffect(() => {
         setScripHistory([]);
         setActiveTab('transactions'); // Reset to first tab on close
@@ -75,25 +111,6 @@ const Portfolio = () => {
         } catch (err) {
             console.error("Error fetching dividends:", err);
             setDividendData([]);
-        }
-    }, [userId]);
-
-    const fetchTotalDividends = useCallback(async () => {
-        const activeUser = (userId && userId !== "null" && userId !== "undefined") ? userId : (localStorage.getItem("username") || "SHREY");
-        try {
-            const token = localStorage.getItem("token");
-            const response = await fetch(
-                `/api/fetchTotalDividends?userId=${encodeURIComponent(activeUser)}`, 
-                {headers: token ? { 'Authorization': `${token}` } : {}}
-            );
-            if (!response.ok) throw new Error("Network response was not ok");
-            const data = await response.json();
-            setTotalDividends(data.totalDividends || 0);
-            setDividendsList(data.dividendsList || []);
-        } catch (err) {
-            console.error("Error fetching total dividends:", err);
-            setTotalDividends(0);
-            setDividendsList([]);
         }
     }, [userId]);
 

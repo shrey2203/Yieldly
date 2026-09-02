@@ -33,4 +33,4 @@ startDateEquityPnl= "13/02/2026"
 # endDateEquityPnl= "02/13/2026"
 #mm-dd-yyyy
 
-dividendUpdateFrequency = 15
+dividendUpdateFrequency = 7

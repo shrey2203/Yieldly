@@ -188,10 +188,24 @@ def calculate_rsi(prices: List[float], period: int = 14) -> Optional[float]:
     Returns:
         RSI value rounded to 2 decimal places (0 - 100), or None if insufficient prices.
     """
-    if not prices or len(prices) < period + 1:
+    if not prices:
         return None
 
-    deltas = [prices[i] - prices[i - 1] for i in range(1, len(prices))]
+    # Filter out None, NaN, and non-positive prices
+    clean_prices = []
+    for p in prices:
+        try:
+            if p is not None:
+                val = float(p)
+                if not math.isnan(val) and not math.isinf(val) and val > 0:
+                    clean_prices.append(val)
+        except (ValueError, TypeError):
+            continue
+
+    if len(clean_prices) < period + 1:
+        return None
+
+    deltas = [clean_prices[i] - clean_prices[i - 1] for i in range(1, len(clean_prices))]
     gains = [max(d, 0.0) for d in deltas]
     losses = [max(-d, 0.0) for d in deltas]
 
@@ -208,7 +222,12 @@ def calculate_rsi(prices: List[float], period: int = 14) -> Optional[float]:
     if avg_gain == 0.0:
         return 0.0
 
-    rs = avg_gain / avg_loss
-    rsi = 100.0 - (100.0 / (1.0 + rs))
-    return round(rsi, 2)
+    try:
+        rs = avg_gain / avg_loss
+        rsi = 100.0 - (100.0 / (1.0 + rs))
+        if math.isnan(rsi) or math.isinf(rsi):
+            return None
+        return round(float(rsi), 2)
+    except (ZeroDivisionError, OverflowError, ValueError):
+        return None
 

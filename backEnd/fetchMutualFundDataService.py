@@ -39,6 +39,38 @@ def fetchMutualFund(mutualFundRawData, userId, reset = False):
     if not reset:
         return mutualFundPackage.to_dict()   
 
+    if str(userId).upper() == 'COMBINED':
+        import updateDayWisePositionMF
+        import helperFunctions
+        from autoDiscoveryService import backfill_combined_positions
+        asOfDate = getLatestExistingData()
+        all_individual_users = User.query.filter(User.username.in_(['Shrey', 'Monica', 'Yogesh', 'Bhavya'])).all()
+        needs_sync = False
+        for ind_user in all_individual_users:
+            ind_latest = updateDayWisePositionMF.getLatestDateForDayWiseMFPosition(ind_user.getId())
+            if ind_latest is None or ind_latest < asOfDate:
+                needs_sync = True
+                try:
+                    ind_df = helperFunctions.getUserMutualFundDataFrame(ind_user.getUserName())
+                    init(ind_user)
+                    ind_pkg = MutualFundPackage(asOfDate, ind_user.getId())
+                    for r in range(len(ind_df.values)):
+                        rItem = ind_df.values[r]
+                        tDate, fName, tType = rItem[0], rItem[1], rItem[5]
+                        iMult = -1 if tType in ["Systematic Transfer Out", "Switch Out", "Sell"] else 1
+                        sScheme = rItem[13] if tType in ["Systematic Transfer In", "Switch In"] else None
+                        tScheme = rItem[14] if tType in ["Systematic Transfer Out", "Switch Out", "Sell"] else None
+                        sDuty = 0 if pd.isna(rItem[11]) else rItem[11]
+                        invObj = Investment(tDate, tType, rItem[6] * iMult, rItem[7] * iMult, rItem[8], sDuty, sScheme, tScheme)
+                        if fName not in ind_pkg._mutualFundsMap:
+                            ind_pkg.addMutualFund(MutualFund(fName))
+                        ind_pkg._mutualFundsMap[fName].addInvestment(invObj)
+                    updateDayWisePositionMF.updateMutualFundDayWisePositionData(ind_user.getId(), ind_pkg, ind_df, False)
+                except Exception as e:
+                    print(f"Error auto-syncing MF for {ind_user.getUserName()}: {e}")
+        if needs_sync:
+            backfill_combined_positions()
+
     init(user)
     # oneTimeFunction(mutualFundRawData, user.getId())
 
@@ -77,7 +109,7 @@ def fetchMutualFund(mutualFundRawData, userId, reset = False):
     mutualFundDataAsOfDateUpdated = mutualFundPackage.postPersistingDayWisePosition(mutualFundDataAsOfDate)
     
     if str(userId).upper() == 'COMBINED':
-        output = MutualFundDayWisePosition.query.all()
+        output = MutualFundDayWisePosition.query.filter_by(userId=1).all()
     else:
         output = MutualFundDayWisePosition.query.filter_by(userId=user.getId()).all()
         
@@ -146,13 +178,29 @@ def checkIfNewInvestments(user):
             for i in latestInvestmentTransactionforADate.all():
                 latestExistingData[latestInvestmentTransaction.first().getTransactionDate()].append(i.getMutualFundId())
             dataframe = dataframe[dataframe["TRANSACTION DATE"] >= pd.Timestamp(latestInvestmentTransaction.first().getTransactionDate())] 
+        # Automatically discover and seed any newly added mutual funds from Excel
+        from autoDiscoveryService import auto_discover_mutual_fund
+        for row in dataframe.values:
+            f_name = str(row[1]).strip() if len(row) > 1 and pd.notna(row[1]) else None
+            if f_name and not MutualFundMaster.query.filter_by(mutualFund=f_name).first():
+                auto_discover_mutual_fund(f_name)
+
         mutualFundMasters = MutualFundMaster.query.all()
         mutualFundMastersMap = {}
         for mutualFund in mutualFundMasters:
             mutualFundMastersMap[mutualFund.getMutualFund()] = mutualFund.getId()
         newInvestmentsList = []
         for i in dataframe.values:
-            date, mf = i[0].date(), mutualFundMastersMap[i[1]]
+            fund_name = i[1]
+            mf_id = mutualFundMastersMap.get(fund_name)
+            if not mf_id:
+                auto_mf = auto_discover_mutual_fund(fund_name)
+                if auto_mf:
+                    mf_id = auto_mf.getId()
+                    mutualFundMastersMap[fund_name] = mf_id
+            if not mf_id:
+                continue
+            date, mf = i[0].date(), mf_id
             if date in latestExistingData and mf in latestExistingData[date]:
                 continue
             newInvestmentsList.append(i)
@@ -167,11 +215,15 @@ def checkIfNewInvestments(user):
             totalAmount = row[6]
             stampDuty = 0 if pd.isna(stampDuty) else stampDuty
             output = MutualFundMaster.query.filter_by(mutualFund = fundName).all()
+            if not output:
+                new_mf = auto_discover_mutual_fund(fundName)
+                if new_mf:
+                    output = [new_mf]
             if len(output) != 0:
                 newEntry = MutualFundInvestmentsTransactions(user.getId(), output[0].getId(), transactDate, transactType, investValue, units, nav, stampDuty, totalAmount)
                 db.session.add(newEntry)
             else:
-                print ("Fund Reference Data is missing (https://www.mfapi.in), create a manual entry to fetch data for : " + fundName + "  Query is -->    INSERT INTO MF_MASTER VALUES (28, '" + fundName + "'150736, '2026-01-01 00:00:00.000', '2026-01-01 00:00:00.000')")
+                print(f"[AutoDiscovery] Could not resolve scheme code for '{fundName}'")
         db.session.commit()
     return newInvestments
 

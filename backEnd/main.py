@@ -3,11 +3,12 @@ import os
 import socket
 import datetime
 from typing import Optional, cast
-from sqlalchemy import text, inspect
+from sqlalchemy import text, inspect, func
 
 appserver_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(os.path.join(appserver_path, "API"))
 from analyseStock import AnalyseStock
+from strategies import StrategyRegistry
 import fetchEquityDayWisePnlPosition
 import initialiseApplication
 import commonUtils
@@ -62,7 +63,7 @@ def login():
     initialiseApplication.initialise()
     
     if username.upper() == "COMBINED":
-        all_users = User.query.filter(User.username != 'COMBINED').all()
+        all_users = User.query.filter(func.lower(User.username) != 'combined').all()
         for u in all_users:
             try:
                 fetchEquityDayWisePnlPosition.syncUserDividends(u.getId())
@@ -85,23 +86,44 @@ def protected():
 def fetchPortfolio():
     userId = request.args.get("userId", "COMBINED").upper()
     portfolioAsOnDate = request.args.get("selectedDate")
+    force_refresh = request.args.get("refresh", "false").lower() == "true"
     print(f"User Id is : {userId}")
     print(f"Portfolio date is : {portfolioAsOnDate}")
     if not portfolioAsOnDate:
         portfolioAsOnDate = date.today().strftime("%Y-%m-%d") 
+        
+    cache_key = (userId, portfolioAsOnDate)
+    if not force_refresh and cache_key in state.portfolioResponseCache:
+        cached_time, cached_data = state.portfolioResponseCache[cache_key]
+        if time.time() - cached_time < 300:  # 5 minutes TTL
+            return jsonify(cached_data) 
         
     try:
         dataframe = helperFunctions.getUserEquityDataFrame(userId)
     except FileNotFoundError:
         return jsonify({"error": "User portfolio not found"}), 404
         
+    # Auto-discover and backfill 5-year history for any new equity in user dataframe
+    try:
+        from autoDiscoveryService import auto_discover_equity
+        equity_col = next((c for c in dataframe.columns if str(c).strip().lower() == 'equity'), 'EQUITY')
+        if equity_col in dataframe.columns:
+            for eq_sym in dataframe[equity_col].dropna().unique():
+                eq_clean = str(eq_sym).strip().upper()
+                if eq_clean and eq_clean not in ['TOTAL', 'EQUITY', 'SUM']:
+                    if not EquityMaster.query.filter_by(equityShortName=eq_clean).first():
+                        auto_discover_equity(eq_clean)
+    except Exception as e:
+        print(f"[AutoDiscovery] Error in portfolio auto-discovery: {e}")
+
     t1 = time.time()
-    fetchEquityDayWisePnlPosition.persistEquityDayWisePnlPosition(userId, dataframe)
+    if str(userId).upper() != "COMBINED":
+        fetchEquityDayWisePnlPosition.persistEquityDayWisePnlPosition(userId, dataframe)
     resolved_uid = helperFunctions.getUserId(userId.lower())
     if resolved_uid:
         try:
-            if userId == "COMBINED":
-                all_users = User.query.filter(User.username != 'COMBINED').all()
+            if userId.upper() == "COMBINED":
+                all_users = User.query.filter(func.lower(User.username) != 'combined').all()
                 for u in all_users:
                     fetchEquityDayWisePnlPosition.syncUserDividends(u.getId())
             else:
@@ -111,6 +133,8 @@ def fetchPortfolio():
             
     realisedPnL, finalHoldings, transactionSummary = fetchEquityDayWisePnlPosition.createPositionsForSingleDay(dataframe, portfolioAsOnDate)
     portfolioDateObj = datetime.datetime.strptime(str(portfolioAsOnDate), "%Y-%m-%d").date()
+    if not state.marketDataCache or portfolioDateObj not in state.marketDataCache:
+        initialiseApplication.initiateCacheEquity(portfolioAsOnDate)
     while portfolioDateObj not in state.marketDataCache.keys():
         portfolioDateObj -= datetime.timedelta(1)
         if (date.today() - portfolioDateObj).days > 30: 
@@ -138,7 +162,13 @@ def fetchPortfolio():
             allottedQtyMap[eq] = allottedQtyMap.get(eq, 0) + raw_qty
             allottedCostMap[eq] = allottedCostMap.get(eq, 0) + (raw_qty * raw_price)
 
-    rawHoldingData = addFinalHoldings.addFinalHoldingData(finalHoldings, liveQuotesMapScrapping, state.equityMasterCache)
+    rawHoldingData = addFinalHoldings.addFinalHoldingData(
+        finalHoldings, 
+        liveQuotesMapScrapping, 
+        state.equityMasterCache,
+        transactionSummary,
+        portfolioAsOnDate
+    )
     finalHoldingsData = commonUtils.convertFinalHoldings(
         rawHoldingData, 
         transactionSummary, 
@@ -161,10 +191,12 @@ def fetchPortfolio():
             for t in trades
         ]
     print(f"Time taken to calculate Holdings: {time.time() - t1}s")
-    return jsonify({
+    res_payload = {
         "holdings": finalHoldingsData, 
         "realisedSummary": rawRealisedData  # Now contains lists of raw trade objects
-    })
+    }
+    state.portfolioResponseCache[cache_key] = (time.time(), res_payload)
+    return jsonify(res_payload)
 
 @app.route("/fetchChartData", methods=["GET"])
 def fetchChartData():
@@ -187,7 +219,7 @@ def fetchDividends():
     tickers = [ticker.strip().upper() for ticker in raw_tickers.split(",") if ticker.strip()]
 
     if username == "COMBINED":
-        all_users = User.query.filter(User.username != 'COMBINED').all()
+        all_users = User.query.filter(func.lower(User.username) != 'combined').all()
         for u in all_users:
             fetchEquityDayWisePnlPosition.syncUserDividends(u.getId())
     else:
@@ -284,7 +316,7 @@ def fetch_total_dividends():
     from dataQuery.equityMasterQuery import EquityMaster
 
     if uname_upper == "COMBINED":
-        all_users = User.query.filter(User.username != 'COMBINED').all()
+        all_users = User.query.filter(func.lower(User.username) != 'combined').all()
         for u in all_users:
             try:
                 fetchEquityDayWisePnlPosition.syncUserDividends(u.getId())
@@ -334,7 +366,8 @@ def fetch_total_dividends():
             "payoutDate": p_date,
             "dividendPerShare": float(record.dividendPerShare) if record.dividendPerShare else 0.0,
             "quantity": float(record.quantityHeld) if record.quantityHeld else 0.0,
-            "amount": float(record.totalDividendAmount) if record.totalDividendAmount else 0.0
+            "amount": float(record.totalDividendAmount) if record.totalDividendAmount else 0.0,
+            "totalDividend": float(record.totalDividendAmount) if record.totalDividendAmount else 0.0
         })
         
     dividendsList.sort(key=lambda x: x['payoutDate'] or '', reverse=True)
@@ -346,10 +379,68 @@ def fetch_total_dividends():
 
 @app.route("/fetchStockAnalysis", methods=["GET"])
 def fetchStockAnalysis():
-    stock = request.args.get("stock").upper()
-    analyseStock = AnalyseStock(stock)
-    holdings = analyseStock.fetchStockAnalysisData(stock)
-    return jsonify(holdings)
+    raw_stock = request.args.get("stock", "").upper()
+    tickers = [s.strip() for s in raw_stock.split(",") if s.strip()]
+    if not tickers:
+        return jsonify({})
+    
+    if len(tickers) == 1:
+        stock = tickers[0]
+        analyseStock = AnalyseStock(stock)
+        holdings = analyseStock.fetchStockAnalysisData(stock)
+        return jsonify(AnalyseStock._sanitize_for_json(holdings))
+    else:
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+
+        def analyze_one(s):
+            try:
+                # Small polite delay between requests to avoid Cloudflare rate-limiting
+                time.sleep(0.15)
+                engine = AnalyseStock(s)
+                return engine.fetchStockAnalysisData(s)
+            except Exception as e:
+                print(f"Error analyzing {s}: {e}")
+                return None
+                
+        # Limit concurrency to 2-3 workers so Screener does not throttle the IP
+        workers = min(len(tickers), 3)
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            results = list(executor.map(analyze_one, tickers))
+            
+        valid_results = [r for r in results if r is not None]
+        return jsonify(AnalyseStock._sanitize_for_json(valid_results))
+
+@app.route("/clearStockAnalysisCache", methods=["POST", "GET"])
+def clearStockAnalysisCache():
+    try:
+        AnalyseStock._cache.clear()
+        return jsonify({"status": "success", "message": "Stock analysis cache cleared successfully"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/fetchAvailableStrategies", methods=["GET"])
+def fetchAvailableStrategies():
+    strategies = StrategyRegistry.get_all_strategy_infos()
+    return jsonify(strategies)
+
+@app.route("/backtestStockStrategy", methods=["GET"])
+def backtestStockStrategy():
+    stock = request.args.get("stock", "").strip().upper()
+    if not stock:
+        return jsonify({"status": "error", "message": "Stock parameter is required"}), 400
+    strategy_id = request.args.get("strategy", "sr_poc").strip().lower()
+    try:
+        years = int(request.args.get("years", 2))
+    except (ValueError, TypeError):
+        years = 2
+        
+    result = StrategyRegistry.run_backtest(
+        strategy_id=strategy_id,
+        stock=stock,
+        lookback_years=years
+    )
+    return jsonify(AnalyseStock._sanitize_for_json(result))
 
 @app.route("/fetchHeatmapData", methods=["GET"])
 def fetchHeatmapData():
@@ -360,11 +451,98 @@ def fetchHeatmapData():
 @app.route("/fetchMutualFundData", methods=["GET"])
 def fetchMutualFundData():
     userId = request.args.get("userId", "COMBINED").upper()
+    force_refresh = request.args.get("refresh", "false").lower() == "true"
+    
+    if not force_refresh and userId in state.mfResponseCache:
+        cached_time, cached_data = state.mfResponseCache[userId]
+        if time.time() - cached_time < 300:  # 5 minutes TTL
+            return jsonify(cached_data)
+            
     try:
         dataframe = helperFunctions.getUserMutualFundDataFrame(userId)
     except FileNotFoundError:
         return jsonify({})
-    return jsonify(fetchMutualFundDataService.fetchMutualFund(dataframe, userId, True))
+    res_data = fetchMutualFundDataService.fetchMutualFund(dataframe, userId, True)
+    state.mfResponseCache[userId] = (time.time(), res_data)
+    return jsonify(res_data)
+
+@app.route("/fetchDashboardOverview", methods=["GET"])
+def fetchDashboardOverview():
+    user_param = request.args.get('userId', 'COMBINED').strip().upper()
+    force_refresh = request.args.get("refresh", "false").lower() == "true"
+    resolved_id = helperFunctions.getUserId(user_param.lower())
+    if not resolved_id:
+        resolved_id = 1
+        
+    cache_key = f"dashboard_{resolved_id}"
+    now = time.time()
+    if not force_refresh and cache_key in state.dashboardOverviewCache:
+        cached_time, cached_data = state.dashboardOverviewCache[cache_key]
+        if now - cached_time < 300:  # 5 minutes TTL
+            return jsonify(cached_data)
+
+    if resolved_id == 1 and (force_refresh or state.dashboardOverviewCache.get(cache_key) is None):
+        latest_market_date = helperFunctions.getLatestExistingEquityMarketData()
+        max_eq_date = db.session.query(func.max(EquityDayWisePosition.asOfDate)).filter_by(userId=1).scalar()
+        if max_eq_date is None or (latest_market_date and max_eq_date < latest_market_date):
+            from autoDiscoveryService import backfill_combined_positions
+            backfill_combined_positions()
+
+    # 1. Equity Summary from Equity_DayWisePosition
+    max_eq_date = db.session.query(func.max(EquityDayWisePosition.asOfDate)).filter_by(userId=resolved_id).scalar()
+    eq_invested, eq_current = 0.0, 0.0
+    if max_eq_date:
+        eq_res = db.session.query(
+            func.sum(EquityDayWisePosition.totalInvestment),
+            func.sum(EquityDayWisePosition.currentInvestment)
+        ).filter_by(userId=resolved_id, asOfDate=max_eq_date).first()
+        if eq_res:
+            eq_invested = float(eq_res[0] or 0.0)
+            eq_current = float(eq_res[1] or 0.0)
+            
+    eq_profit = eq_current - eq_invested
+    eq_profit_pct = (eq_profit / eq_invested * 100) if eq_invested > 0 else 0.0
+    
+    # 2. Mutual Fund Summary from MF_DayWisePosition
+    max_mf_date = db.session.query(func.max(MutualFundDayWisePosition.asOfDate)).filter_by(userId=resolved_id).scalar()
+    mf_invested, mf_current = 0.0, 0.0
+    if max_mf_date:
+        mf_res = db.session.query(
+            func.sum(MutualFundDayWisePosition.totalInvestment),
+            func.sum(MutualFundDayWisePosition.currentInvestment)
+        ).filter_by(userId=resolved_id, asOfDate=max_mf_date).first()
+        if mf_res:
+            mf_invested = float(mf_res[0] or 0.0)
+            mf_current = float(mf_res[1] or 0.0)
+            
+    mf_profit = mf_current - mf_invested
+    mf_profit_pct = (mf_profit / mf_invested * 100) if mf_invested > 0 else 0.0
+    
+    # 3. Dividends from DividendsHistorical
+    from dataQuery.dividendsHistoricalQuery import DividendsHistorical
+    div_query = db.session.query(func.sum(DividendsHistorical.totalDividendAmount))
+    if user_param != "COMBINED":
+        div_query = div_query.filter_by(userId=resolved_id)
+    total_div = float(div_query.scalar() or 0.0)
+    
+    data = {
+        "equity": {
+            "invested": eq_invested,
+            "current": eq_current,
+            "profit": eq_profit,
+            "profitPct": eq_profit_pct
+        },
+        "mutualFunds": {
+            "invested": mf_invested,
+            "current": mf_current,
+            "profit": mf_profit,
+            "profitPct": mf_profit_pct
+        },
+        "totalDividends": total_div
+    }
+    
+    state.dashboardOverviewCache[cache_key] = (now, data)
+    return jsonify(data)
 
 # @app.route("/marketStatus", methods=["GET"])
 # def marketStatus():
@@ -404,8 +582,9 @@ if __name__ == "__main__":
             db.create_all()
             inspector = inspect(db.engine)
             print("Tables in the database:", inspector.get_table_names())
+            initialiseApplication.initialise()
         except Exception as e:
-            print(f"Database connection error: {e}")
+            print(f"Startup initialization error: {e}")
 
     # if not os.environ.get("WERKZEUG_RUN_MAIN"):
     # marketDataThread = threading.Thread(target=executeMarketDataService, daemon=True)

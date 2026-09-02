@@ -12,6 +12,18 @@ _EQUITY_MASTER_CACHE = {}
 _MARKET_DATA_CACHE = {}
 
 def initialise():
+    try:
+        from autoDiscoveryService import auto_sync_all_investments
+        auto_sync_all_investments()
+    except Exception as e:
+        print(f"[AutoDiscovery] Initial sync error: {e}")
+
+    try:
+        import fetchEquityDayWisePnlPosition
+        fetchEquityDayWisePnlPosition.updateDividendsForHoldings()
+    except Exception as e:
+        print(f"[Dividends] Sync error: {e}")
+
     initiateCacheEquity()
     initiateCacheEquityMF()
     prepareLatestAvailableSnapsMap()
@@ -25,19 +37,34 @@ def getLastClose(portfolioAsOnDate):
         targetDate = portfolioAsOnDate
     if targetDate in state.prevDayCloseCache:
         return state.prevDayCloseCache[targetDate]
-    lastTradingDay = targetDate - timedelta(1)
-    equityMarketDataList = EquityMarketData.query.filter_by(marketDate=lastTradingDay).all()
-    while not equityMarketDataList:
-        lastTradingDay -= timedelta(1)
-        equityMarketDataList = EquityMarketData.query.filter_by(marketDate=lastTradingDay).all()
+        
     if not state.equityMasterCache:
         masters = EquityMaster.query.all()
         state.equityMasterCache = {m.getId(): m for m in masters}
+
+    # Query the most recent trading close strictly before targetDate for EVERY equity individually
+    subquery = (
+        db.session.query(
+            EquityMarketData.equityId,
+            func.max(EquityMarketData.marketDate).label('maxDate')
+        )
+        .filter(EquityMarketData.marketDate < targetDate)
+        .group_by(EquityMarketData.equityId)
+        .subquery()
+    )
+    
+    records = (
+        db.session.query(EquityMarketData.equityId, EquityMarketData.close)
+        .join(subquery, (EquityMarketData.equityId == subquery.c.equityId) & (EquityMarketData.marketDate == subquery.c.maxDate))
+        .all()
+    )
+
     dailyClosePrices = {}
-    for entry in equityMarketDataList:
-        equity = state.equityMasterCache.get(entry.getEquityId())
-        if equity:
-            dailyClosePrices[equity.getEquityShortName()] = entry.getClose()
+    for eq_id, close_val in records:
+        equity = state.equityMasterCache.get(eq_id)
+        if equity and close_val is not None:
+            dailyClosePrices[equity.getEquityShortName()] = float(close_val)
+
     state.prevDayCloseCache[targetDate] = dailyClosePrices
     return dailyClosePrices
 

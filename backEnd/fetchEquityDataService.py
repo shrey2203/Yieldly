@@ -80,11 +80,11 @@ def updateEquityData():
     equityMasters = EquityMaster.query.all()
     for equity in equityMasters:
         lastUpdatedTime = equity.getLastUpdatedTime()
-        if todayDateTime - lastUpdatedTime < timedelta(hours=applicationConfig.refreshFrequencyEquity): 
+        latestExisitingDate = getLatestEquityExistingData(equity)
+        if latestExisitingDate != -1 and (todayDateTime - lastUpdatedTime < timedelta(hours=applicationConfig.refreshFrequencyEquity)): 
             print("The difference is less than " + str(applicationConfig.refreshFrequencyEquity) + " hours for " + equity.getEquityShortName() + ", not updating equity data")
             continue
         start_time = time.time()
-        latestExisitingDate = getLatestEquityExistingData(equity)
         ticker = yf.Ticker(equity.getEquityShortName() + ".NS")
         if latestExisitingDate == -1:
             equityData = ticker.history(period="5y", interval="1d")

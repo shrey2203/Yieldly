@@ -399,6 +399,10 @@ const PortfolioUI = ({
                 .sort((a, b) => b.realisedPnL - a.realisedPnL);
         }
         
+        if (viewTab === 'dividends') {
+            return summary.dividendsList || [];
+        }
+        
         // Active Holdings: only stocks with open positions
         return portfolioData.filter(item => Number(item.quantity) > 0);
     }, [viewTab, portfolioData, summary]);
@@ -604,8 +608,11 @@ const PortfolioUI = ({
                 }
             ];
         }
+        if (viewTab === 'dividends') {
+            return allDividendsColumnDefs;
+        }
         return columnDefs;
-    }, [viewTab, columnDefs, formatINR, rawRealisedData]);
+    }, [viewTab, columnDefs, formatINR, rawRealisedData, allDividendsColumnDefs]);
 
     const activePieData = chartType === 'sector' ? sectorData : stockAllocationData;
 
@@ -665,11 +672,64 @@ const PortfolioUI = ({
                 >
                     🚀 IPO Corner
                 </div>
+                <div 
+                    className={`chrome-tab ${viewTab === 'dividends' ? 'active' : ''}`} 
+                    onClick={() => {
+                        setViewTab('dividends');
+                        if (fetchTotalDividends) fetchTotalDividends();
+                    }}
+                >
+                    🎁 Dividends
+                </div>
             </nav>
             
 
             <section className="stats-grid">
-                {viewTab === 'ipo' ? (
+                {viewTab === 'dividends' ? (
+                    // DEDICATED 4 TILES FOR DIVIDENDS
+                    <>
+                        <div className="stat-card positive">
+                            <div className="card-icon" style={{background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e'}}>🎁</div>
+                            <div className="info">
+                                <h3>Total Dividends</h3>
+                                <p>₹{formatINR(summary.totalDividends)}</p>
+                                <span className="card-sub-info" style={{ color: '#10b981', fontSize: '11px', fontWeight: 600 }}>
+                                    Cumulative Passive Yield
+                                </span>
+                            </div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="card-icon" style={{background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6'}}>📅</div>
+                            <div className="info">
+                                <h3>Total Payouts</h3>
+                                <p>{summary.dividendsList?.length || 0}</p>
+                                <span className="card-sub-info">
+                                    Distribution Events
+                                </span>
+                            </div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="card-icon" style={{background: 'rgba(168, 85, 247, 0.1)', color: '#a855f7'}}>🏢</div>
+                            <div className="info">
+                                <h3>Companies</h3>
+                                <p>{new Set((summary.dividendsList || []).map(d => d.stock)).size} Scrips</p>
+                                <span className="card-sub-info">
+                                    Dividend-paying stocks
+                                </span>
+                            </div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="card-icon" style={{background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b'}}>💎</div>
+                            <div className="info">
+                                <h3>Average Payout</h3>
+                                <p>₹{summary.dividendsList && summary.dividendsList.length > 0 ? formatINR(summary.totalDividends / summary.dividendsList.length) : "0"}</p>
+                                <span className="card-sub-info">
+                                    Per distribution
+                                </span>
+                            </div>
+                        </div>
+                    </>
+                ) : viewTab === 'ipo' ? (
                     // DEDICATED 4 TILES FOR IPO CORNER (ACTIVE + CLOSED)
                     <>
                         <div className="stat-card">
@@ -817,6 +877,7 @@ const PortfolioUI = ({
                                 {viewTab === 'holdings' && "Active Portfolio"}
                                 {viewTab === 'realised' && "Realised Profit & Loss Summary"}
                                 {viewTab === 'ipo' && "Initial Public Offerings (IPO)"}
+                                {viewTab === 'dividends' && "Dividend Income Ledger"}
                             </h3>
                             <span className="holdings-count-badge">{filteredRowData.length} Items</span>
                         </div>

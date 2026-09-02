@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from datetime import datetime, timedelta
 from config import db
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 
 from dataQuery.userQuery import User
 from dataQuery.equityMasterQuery import EquityMaster
@@ -20,36 +20,35 @@ def getUserId(username):
             return user.getId()
             
     # If username is 'combined' and not in DB, auto-create it
-    if str(username).lower() == "combined":
-        try:
-            combined_user = User(username="COMBINED", panNumber="COMBINED_ALL", emailAddress="combined@yieldly.com")
-            db.session.add(combined_user)
-            db.session.commit()
-            return combined_user.getId()
-        except Exception as e:
-            db.session.rollback()
-            existing = User.query.filter(User.username.ilike("combined")).first()
-            if existing:
-                return existing.getId()
+    if str(username).lower() == 'combined':
+        newUser = User(username='Combined', panNumber='COMBINED', emailAddress='combined@yieldly.com')
+        db.session.add(newUser)
+        db.session.commit()
+        return newUser.getId()
     return None
 
+def getCombinedUsers():
+    all_users = User.query.filter(func.lower(User.username) != 'combined').all()
+    user_names = [u.getUserName().upper() for u in all_users if u.getUserName().upper() != 'COMBINED']
+    if not user_names and os.path.exists(HOLDINGS_DIR):
+        for fname in os.listdir(HOLDINGS_DIR):
+            if fname.endswith('.xlsx') and not fname.endswith('_MF.xlsx') and not fname.startswith('~$'):
+                clean_name = os.path.splitext(fname)[0].upper()
+                if clean_name != 'COMBINED':
+                    user_names.append(clean_name)
+    return [u for u in set(user_names) if u != 'COMBINED']
 
 def getUserEquityDataFrame(username):
     """
     Fetch equity holdings DataFrame for a specific user,
-    or dynamically aggregate all non-combined user holdings for 'COMBINED'.
+    or dynamically aggregate all individual user holdings (excluding COMBINED.xlsx).
     """
     uname = str(username or '').strip().upper()
     if uname == 'COMBINED':
         dfs = []
-        all_users = User.query.filter(User.username != 'COMBINED').all()
-        user_names = [u.getUserName().upper() for u in all_users] if all_users else []
-        if not user_names and os.path.exists(HOLDINGS_DIR):
-            for fname in os.listdir(HOLDINGS_DIR):
-                if fname.endswith('.xlsx') and not fname.endswith('_MF.xlsx') and not fname.startswith('~$') and fname != 'COMBINED.xlsx':
-                    user_names.append(os.path.splitext(fname)[0].upper())
+        user_names = getCombinedUsers()
                     
-        for u in set(user_names):
+        for u in user_names:
             fpath = os.path.join(HOLDINGS_DIR, f"{u}.xlsx")
             if os.path.exists(fpath):
                 try:
@@ -67,10 +66,7 @@ def getUserEquityDataFrame(username):
                 combined = combined.sort_values(by=date_col).reset_index(drop=True)
             return combined
             
-        combined_file = os.path.join(HOLDINGS_DIR, "COMBINED.xlsx")
-        if os.path.exists(combined_file):
-            return pd.read_excel(combined_file, 0)
-        raise FileNotFoundError("No equity holdings files found for combined portfolio.")
+        raise FileNotFoundError("No equity holdings files found for individual users.")
     else:
         excelPath = os.path.join(HOLDINGS_DIR, f"{uname}.xlsx")
         return pd.read_excel(excelPath, 0)
@@ -79,19 +75,14 @@ def getUserEquityDataFrame(username):
 def getUserMutualFundDataFrame(username):
     """
     Fetch mutual fund holdings DataFrame for a specific user,
-    or dynamically aggregate all non-combined user transactions for 'COMBINED'.
+    or dynamically aggregate all individual user transactions (excluding COMBINED_MF.xlsx).
     """
     uname = str(username or '').strip().upper()
     if uname == 'COMBINED':
         dfs = []
-        all_users = User.query.filter(User.username != 'COMBINED').all()
-        user_names = [u.getUserName().upper() for u in all_users] if all_users else []
-        if not user_names and os.path.exists(HOLDINGS_DIR):
-            for fname in os.listdir(HOLDINGS_DIR):
-                if fname.endswith('_MF.xlsx') and not fname.startswith('~$') and fname != 'COMBINED_MF.xlsx':
-                    user_names.append(fname.replace('_MF.xlsx', '').upper())
+        user_names = getCombinedUsers()
                     
-        for u in set(user_names):
+        for u in user_names:
             fpath = os.path.join(HOLDINGS_DIR, f"{u}_MF.xlsx")
             if os.path.exists(fpath):
                 try:
@@ -108,10 +99,7 @@ def getUserMutualFundDataFrame(username):
                 combined = combined.sort_values(by=combined.columns[0]).reset_index(drop=True)
             return combined
             
-        combined_file = os.path.join(HOLDINGS_DIR, "COMBINED_MF.xlsx")
-        if os.path.exists(combined_file):
-            return pd.read_excel(combined_file, 0)
-        raise FileNotFoundError("No MF holdings files found for combined portfolio.")
+        raise FileNotFoundError("No MF holdings files found for individual users.")
     else:
         excel_file = os.path.join(HOLDINGS_DIR, f"{uname}_MF.xlsx")
         return pd.read_excel(excel_file, 0)

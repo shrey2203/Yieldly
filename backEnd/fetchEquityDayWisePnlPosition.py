@@ -54,18 +54,12 @@ def getPositions(rawData, username, portfolioAsOnDate=None):
     if latestMarketDate:
         endDate = min(endDate, latestMarketDate)
         
-    if str(username).upper() == 'COMBINED':
-        dbResults = EquityDayWisePosition.query.filter(
-            EquityDayWisePosition.asOfDate >= startDate,
-            EquityDayWisePosition.asOfDate <= endDate
-        ).all()
-    else:
-        userId = helperFunctions.getUserId(username)
-        dbResults = EquityDayWisePosition.query.filter(
-            EquityDayWisePosition.userId == userId,
-            EquityDayWisePosition.asOfDate >= startDate,
-            EquityDayWisePosition.asOfDate <= endDate
-        ).all()
+    userId = helperFunctions.getUserId(username)
+    dbResults = EquityDayWisePosition.query.filter(
+        EquityDayWisePosition.userId == userId,
+        EquityDayWisePosition.asOfDate >= startDate,
+        EquityDayWisePosition.asOfDate <= endDate
+    ).all()
     
     dailyStats = defaultdict(lambda: {'invested': 0, 'current': 0})
     for record in dbResults:
@@ -383,7 +377,8 @@ def updateEquityDataBulk():
     for equity in equitiesToUpdate:
         latestInDb = latestDateMap.get(equity.getId(), -1)
         tickerToLatestDateMap[equity.getId()] = latestInDb
-        comparisonDate = latestInDb + timedelta(days=1) if latestInDb != -1 else (todayDateTime - timedelta(days=3100)).date()
+        # Look back 14 days to backfill any historical gaps or delayed quotes from Yahoo Finance
+        comparisonDate = (latestInDb - timedelta(days=14)) if latestInDb != -1 else (todayDateTime - timedelta(days=3100)).date()
         if oldestDateNeeded is None or comparisonDate < oldestDateNeeded:
             oldestDateNeeded = comparisonDate
             
@@ -413,52 +408,38 @@ def updateEquityDataBulk():
             print(f"No data found for {tickerSymbol}, skipping...")
             continue
             
-        lastDateInDb = latestDateMap.get(equity.getId(), -1)
-        
         for marketTimestamp, row in tickerData.iterrows():
             marketDate = marketTimestamp.date()
             
-            if lastDateInDb == -1 or marketDate >= lastDateInDb:
-                # 1. Extract values cleanly to avoid code duplication
-                if len(tickerList) == 1:
-                    r_open = row[(tickerSymbol, "Open")]
-                    r_close = row[(tickerSymbol, "Close")]
-                    r_low = row[(tickerSymbol, "Low")]
-                    r_high = row[(tickerSymbol, "High")]
-                else:
-                    r_open = row["Open"]
-                    r_close = row["Close"]
-                    r_low = row["Low"]
-                    r_high = row["High"]
+            # Extract values cleanly
+            if len(tickerList) == 1:
+                r_open = float(row[(tickerSymbol, "Open")])
+                r_close = float(row[(tickerSymbol, "Close")])
+                r_low = float(row[(tickerSymbol, "Low")])
+                r_high = float(row[(tickerSymbol, "High")])
+            else:
+                r_open = float(row["Open"])
+                r_close = float(row["Close"])
+                r_low = float(row["Low"])
+                r_high = float(row["High"])
 
-                # 2. Check for the exact overlapping day to UPDATE rather than insert
-                if lastDateInDb != -1 and marketDate == lastDateInDb:
-                    existingEntry = EquityMarketData.query.filter_by(
-                        equityId=equity.getId(), 
-                        marketDate=marketDate
-                    ).first()
-                    
-                    if existingEntry:
-                        # Update existing fields
-                        existingEntry.open = r_open
-                        existingEntry.close = r_close
-                        existingEntry.low = r_low
-                        existingEntry.high = r_high
-                    else:
-                        # Fallback just in case the map said it existed but it didn't
-                        newEntry = EquityMarketData(
-                            equityId=equity.getId(), marketDate=marketDate,
-                            open=r_open, close=r_close, low=r_low, high=r_high
-                        )
-                        db.session.add(newEntry)
-                        
-                # 3. For all subsequent dates, it is safe to INSERT
-                else:
-                    newEntry = EquityMarketData(
-                        equityId=equity.getId(), marketDate=marketDate,
-                        open=r_open, close=r_close, low=r_low, high=r_high
-                    )
-                    db.session.add(newEntry)
+            # Upsert: Update if existing, Insert if missing (fills all historical gaps)
+            existingEntry = EquityMarketData.query.filter_by(
+                equityId=equity.getId(), 
+                marketDate=marketDate
+            ).first()
+            
+            if existingEntry:
+                existingEntry.open = r_open
+                existingEntry.close = r_close
+                existingEntry.low = r_low
+                existingEntry.high = r_high
+            else:
+                newEntry = EquityMarketData(
+                    equityId=equity.getId(), marketDate=marketDate,
+                    open=r_open, close=r_close, low=r_low, high=r_high
+                )
+                db.session.add(newEntry)
                     
         equity.lastUpdatedTime = todayDateTime 
         

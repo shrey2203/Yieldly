@@ -1,0 +1,327 @@
+Tables in the database: ['DIVIDENDS', 'DIVIDENDS_HISTORICAL', 'EQUITY_MARKET_DATA', 'EQUITY_MASTER', 'Equity_DayWisePosition', 'MF_DayWisePosition', 'MF_INVESTMENTS_TRANSACTIONS', 'MF_MARKET_DATA', 'MF_MASTER', 'USERS']
+[AutoDiscovery] Scanning HOLDINGS directory for new investments...
+--- Missing Market Data for 2026-09-02 ---
+Missing: NDSL
+Missing: TATAMOTORS
+Total Missing: 2
+Cache Initialized for 194 equities on 2026-09-02.
+[AutoDiscovery] Synchronizing Combined (userId=1) positions as sum of Shrey, Monica, Yogesh, Bhavya...
+[AutoDiscovery] Combined position data successfully backfilled and synchronized!
+Dividend fetched successfully.
+--- Missing Market Data for 2026-09-02 ---
+Missing: NDSL
+Missing: TATAMOTORS
+Total Missing: 2
+Cache Initialized for 194 equities on 2026-09-02.
+Cache Initialized for 33 mutual Funds on 2026-09-01.
+Latest price map initialized for 198 equities.
+Starting Flask server on port 5001
+ * Serving Flask app 'config'
+ * Debug mode: off
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5001
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:10:14] "GET /fetchDashboardOverview?userId=COMBINED HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:10:38] "GET /fetchDashboardOverview?userId=COMBINED HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:10:41] "GET /fetchPortfolio?userId=COMBINED HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:11:38] "GET /fetchDashboardOverview?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:11:45] "POST /login HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:11:48] "GET /fetchDashboardOverview?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:12:16] "GET /fetchChartData?userId=Combined&selectedDate=2026-09-02 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:12:17] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:12:17] "GET /fetchPortfolio?userId=Combined&selectedDate=2026-09-02 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:12:18] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:12:19] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:12:32] "GET /fetchPortfolio?userId=Combined&selectedDate=2026-09-02 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:12:34] "GET /fetchChartData?userId=Combined&selectedDate=2026-09-02 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:12:34] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:12:35] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:12:36] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:12:44] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:12:47] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:12:52] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:13:48] "GET /fetchDashboardOverview?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:13:54] "GET /fetchMutualFundData?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:14:11] "GET /fetchDashboardOverview?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:15:52] "GET /fetchDashboardOverview?userId=Combined HTTP/1.1" 200 -
+User Id is : COMBINED
+Portfolio date is : None
+{'STCG': 96002.37045999999, 'LTCG': -11133.67510000001}
+Time taken to calculate Holdings: 1.0384750366210938s
+The difference is less than 24 hours for Quant Flexi Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for HDFC NIFTY200 Momentum 30 Index Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for HDFC Small Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for HDFC Large And Mid Cap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Nippon India Multi Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for Nippon India Growth Mid Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for Invesco India PSU Equity Fund (G), not updating mutual fund data
+The difference is less than 24 hours for SBI Automotive Opportunities Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for PGIM India Flexi Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for Parag Parikh Flexi Cap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Aditya Birla SL Frontline Equity Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Mirae Asset Large & Midcap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Mirae Asset Large Cap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Kotak Flexi Cap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Mirae Asset Ultra Short Duration Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Mirae Asset Global X Artificial Intelligence & Technology E T F FoF Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Mirae Asset Multicap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Quant Small Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for Quant Large and Mid Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for SBI PSU Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Invesco India Infrastructure Fund (G), not updating mutual fund data
+The difference is less than 24 hours for HDFC Defence Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for ICICI Pru Energy Opp Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Motilal Oswal Nifty India Defence Index Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Kotak Nifty Next 50 Index Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Tata Digital India Fund Reg Plan (G), not updating mutual fund data
+The difference is less than 24 hours for Motilal Oswal Midcap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for HDFC Silver E T F FoF Reg (G), not updating mutual fund data
+The difference is less than 24 hours for HDFC Flexi Cap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Nippon India Small Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for Invesco India Arbitrage Fund (G), not updating mutual fund data
+The difference is less than 24 hours for ICICI Pru Energy Opportunities Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Motilal Oswal Nifty Capital Market Index Fund Reg (G), not updating mutual fund data
+Dividend fetched successfully.
+[AutoDiscovery] Scanning HOLDINGS directory for new investments...
+[AutoDiscovery] Synchronizing Combined (userId=1) positions as sum of Shrey, Monica, Yogesh, Bhavya...
+[AutoDiscovery] Combined position data successfully backfilled and synchronized!
+Dividend fetched successfully.
+--- Missing Market Data for 2026-09-02 ---
+Missing: NDSL
+Missing: TATAMOTORS
+Total Missing: 2
+Cache Initialized for 194 equities on 2026-09-02.
+Cache Initialized for 33 mutual Funds on 2026-09-01.
+Latest price map initialized for 198 equities.
+User Id is : COMBINED
+Portfolio date is : 2026-09-02
+{'STCG': 96002.37045999999, 'LTCG': -11133.67510000001}
+Time taken to calculate Holdings: 4.089329719543457s
+User Id is : COMBINED
+Portfolio date is : 2026-09-02
+Time taken load the Page for Mutual Funds is : 4.07681679725647
+The difference is less than 24 hours for Quant Flexi Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for HDFC NIFTY200 Momentum 30 Index Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for HDFC Small Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for HDFC Large And Mid Cap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Nippon India Multi Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for Nippon India Growth Mid Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for Invesco India PSU Equity Fund (G), not updating mutual fund data
+The difference is less than 24 hours for SBI Automotive Opportunities Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for PGIM India Flexi Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for Parag Parikh Flexi Cap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Aditya Birla SL Frontline Equity Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Mirae Asset Large & Midcap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Mirae Asset Large Cap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Kotak Flexi Cap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Mirae Asset Ultra Short Duration Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Mirae Asset Global X Artificial Intelligence & Technology E T F FoF Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Mirae Asset Multicap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Quant Small Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for Quant Large and Mid Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for SBI PSU Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Invesco India Infrastructure Fund (G), not updating mutual fund data
+The difference is less than 24 hours for HDFC Defence Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for ICICI Pru Energy Opp Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Motilal Oswal Nifty India Defence Index Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Kotak Nifty Next 50 Index Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Tata Digital India Fund Reg Plan (G), not updating mutual fund data
+The difference is less than 24 hours for Motilal Oswal Midcap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for HDFC Silver E T F FoF Reg (G), not updating mutual fund data
+The difference is less than 24 hours for HDFC Flexi Cap Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Nippon India Small Cap Fund (G), not updating mutual fund data
+The difference is less than 24 hours for Invesco India Arbitrage Fund (G), not updating mutual fund data
+The difference is less than 24 hours for ICICI Pru Energy Opportunities Fund Reg (G), not updating mutual fund data
+The difference is less than 24 hours for Motilal Oswal Nifty Capital Market Index Fund Reg (G), not updating mutual fund data
+ERROR:yfinance:$TATAMOTORS.NS: possibly delisted; no price data found  (1d 1927-09-27 -> 2026-09-02) (Yahoo error = "No data found, symbol may be delisted")
+ERROR:yfinance:HTTP Error 404: 
+ERROR:yfinance:$^NSEI.NS: possibly delisted; no timezone found
+ERROR:yfinance:HTTP Error 404: 
+ERROR:yfinance:$^NSEBANK.NS: possibly delisted; no timezone found
+Syncing: SBIN (Last Update: 2024-06-01 00:00:00)
+Syncing: RELIANCE (Last Update: 2024-06-01 00:00:00)
+Syncing: HDFCBANK (Last Update: 2024-06-01 00:00:00)
+Syncing: LT (Last Update: 2024-06-01 00:00:00)
+Syncing: HDFCLIFE (Last Update: 2024-06-01 00:00:00)
+Syncing: ITC (Last Update: 2024-06-01 00:00:00)
+Syncing: HDFCGOLD (Last Update: 2024-06-01 00:00:00)
+Syncing: INDIGOPNTS (Last Update: 2024-06-01 00:00:00)
+Syncing: RAILTEL (Last Update: 2024-06-01 00:00:00)
+Syncing: HERANBA (Last Update: 2024-06-01 00:00:00)
+Syncing: MTARTECH (Last Update: 2024-06-01 00:00:00)
+Syncing: SURYODAY (Last Update: 2024-06-01 00:00:00)
+Syncing: SONACOMS (Last Update: 2024-06-01 00:00:00)
+Syncing: GRINFRA (Last Update: 2024-06-01 00:00:00)
+Syncing: ANUP (Last Update: 2024-06-01 00:00:00)
+Syncing: TATVA (Last Update: 2024-06-01 00:00:00)
+Syncing: WINDLAS (Last Update: 2024-06-01 00:00:00)
+Syncing: LXCHEM (Last Update: 2024-06-01 00:00:00)
+Syncing: ABSLAMC (Last Update: 2024-06-01 00:00:00)
+Syncing: NATIONALUM (Last Update: 2024-06-01 00:00:00)
+Syncing: IEX (Last Update: 2024-06-01 00:00:00)
+Syncing: TATAPOWER (Last Update: 2024-06-01 00:00:00)
+Syncing: KPITTECH (Last Update: 2024-06-01 00:00:00)
+Syncing: M&M (Last Update: 2024-06-01 00:00:00)
+Syncing: VEDL (Last Update: 2024-06-01 00:00:00)
+Syncing: TATAMOTORS (Last Update: 2024-06-01 00:00:00)
+Syncing: CAMPUS (Last Update: 2024-06-01 00:00:00)
+Syncing: LICI (Last Update: 2024-06-01 00:00:00)
+Syncing: FUSION (Last Update: 2024-06-01 00:00:00)
+Syncing: ASHOKLEY (Last Update: 2024-06-01 00:00:00)
+Syncing: ELIN (Last Update: 2024-06-01 00:00:00)
+Syncing: BECTORFOOD (Last Update: 2024-06-01 00:00:00)
+Syncing: JIOFIN (Last Update: 2024-06-01 00:00:00)
+Syncing: NETWEB (Last Update: 2024-06-01 00:00:00)
+Syncing: CONCORDBIO (Last Update: 2024-06-01 00:00:00)
+Syncing: PYRAMID (Last Update: 2024-06-01 00:00:00)
+Syncing: IDFCFIRSTB (Last Update: 2024-06-01 00:00:00)
+Syncing: RISHABH (Last Update: 2024-06-01 00:00:00)
+Syncing: JLHL (Last Update: 2024-06-01 00:00:00)
+Syncing: RRKABEL (Last Update: 2024-06-01 00:00:00)
+Syncing: ITBEES (Last Update: 2024-06-01 00:00:00)
+Syncing: ABFRL (Last Update: 2024-06-01 00:00:00)
+Syncing: HAL (Last Update: 2024-06-01 00:00:00)
+Syncing: TECHM (Last Update: 2024-06-01 00:00:00)
+Syncing: KOTAKBANK (Last Update: 2024-06-01 00:00:00)
+Syncing: SUZLON (Last Update: 2024-06-01 00:00:00)
+Syncing: TATATECH (Last Update: 2024-06-01 00:00:00)
+Syncing: ADANIGREEN (Last Update: 2024-06-01 00:00:00)
+Syncing: GANDHAR (Last Update: 2024-06-01 00:00:00)
+Syncing: ATGL (Last Update: 2024-06-01 00:00:00)
+Syncing: ICICIBANK (Last Update: 2024-06-01 00:00:00)
+Syncing: GAIL (Last Update: 2024-06-01 00:00:00)
+Syncing: BEL (Last Update: 2024-06-01 00:00:00)
+Syncing: PARAS (Last Update: 2024-06-01 00:00:00)
+Syncing: HAPPYFORGE (Last Update: 2024-06-01 00:00:00)
+Syncing: ZEEL (Last Update: 2024-06-01 00:00:00)
+Syncing: BAJAJ-AUTO (Last Update: 2024-06-01 00:00:00)
+Syncing: POLYCAB (Last Update: 2024-06-01 00:00:00)
+Syncing: MAZDOCK (Last Update: 2024-06-01 00:00:00)
+Syncing: SALASAR (Last Update: 2024-06-01 00:00:00)
+Syncing: NTPC (Last Update: 2024-06-01 00:00:00)
+Syncing: IRCTC (Last Update: 2024-06-01 00:00:00)
+Syncing: IREDA (Last Update: 2024-06-01 00:00:00)
+Syncing: RECLTD (Last Update: 2024-06-01 00:00:00)
+Syncing: PFC (Last Update: 2024-06-01 00:00:00)
+Syncing: MGL (Last Update: 2024-06-01 00:00:00)
+Syncing: TATACOMM (Last Update: 2024-06-01 00:00:00)
+Syncing: CGPOWER (Last Update: 2024-06-01 00:00:00)
+Syncing: NHPC (Last Update: 2024-06-01 00:00:00)
+Syncing: ETERNAL (Last Update: 2024-06-01 00:00:00)
+Syncing: CDSL (Last Update: 2024-06-01 00:00:00)
+Syncing: GMRAIRPORT (Last Update: 2024-06-01 00:00:00)
+Syncing: INDUSTOWER (Last Update: 2024-06-01 00:00:00)
+Syncing: ADANIPORTS (Last Update: 2024-06-01 00:00:00)
+Syncing: EXIDEIND (Last Update: 2024-06-01 00:00:00)
+Syncing: RVNL (Last Update: 2024-06-01 00:00:00)
+Syncing: JWL (Last Update: 2024-06-01 00:00:00)
+Syncing: SJVN (Last Update: 2024-06-01 00:00:00)
+Syncing: RAMCOCEM (Last Update: 2024-06-01 00:00:00)
+Syncing: IDEA (Last Update: 2024-06-01 00:00:00)
+Syncing: UJJIVANSFB (Last Update: 2024-06-01 00:00:00)
+Syncing: BSE (Last Update: 2024-06-01 00:00:00)
+Syncing: IRFC (Last Update: 2024-06-01 00:00:00)
+Syncing: BHEL (Last Update: 2024-06-01 00:00:00)
+Syncing: MOTHERSON (Last Update: 2024-06-01 00:00:00)
+Syncing: IRCON (Last Update: 2024-06-01 00:00:00)
+Syncing: BDL (Last Update: 2024-06-01 00:00:00)
+Syncing: NIFTYBEES (Last Update: 2024-06-01 00:00:00)
+Syncing: IXIGO (Last Update: 2024-06-01 00:00:00)
+Syncing: PHARMABEES (Last Update: 2024-06-01 00:00:00)
+Syncing: BIOCON (Last Update: 2024-06-01 00:00:00)
+Syncing: EMCURE (Last Update: 2024-06-01 00:00:00)
+Syncing: AMBER (Last Update: 2024-06-01 00:00:00)
+Syncing: HUDCO (Last Update: 2024-06-01 00:00:00)
+Syncing: CONCOR (Last Update: 2024-06-01 00:00:00)
+Syncing: GOLDBEES (Last Update: 2024-06-01 00:00:00)
+Syncing: GLENMARK (Last Update: 2024-06-01 00:00:00)
+Syncing: NFL (Last Update: 2024-06-01 00:00:00)
+Syncing: DIXON (Last Update: 2024-06-01 00:00:00)
+Syncing: EPL (Last Update: 2024-06-01 00:00:00)
+Syncing: BAJAJFINSV (Last Update: 2024-06-01 00:00:00)
+Syncing: GENUSPOWER (Last Update: 2024-06-01 00:00:00)
+Syncing: PREMIERENE (Last Update: 2024-06-01 00:00:00)
+Syncing: AJOONI (Last Update: 2024-06-01 00:00:00)
+Syncing: ABCAPITAL (Last Update: 2024-06-01 00:00:00)
+Syncing: BAJAJHFL (Last Update: 2024-06-01 00:00:00)
+Syncing: NATCOPHARM (Last Update: 2024-06-01 00:00:00)
+Syncing: GENUSPAPER (Last Update: 2024-06-01 00:00:00)
+Syncing: RPOWER (Last Update: 2024-06-01 00:00:00)
+Syncing: DATAPATTNS (Last Update: 2024-06-01 00:00:00)
+Syncing: KRN (Last Update: 2024-06-01 00:00:00)
+Syncing: MOREPENLAB (Last Update: 2024-06-01 00:00:00)
+Syncing: IOC (Last Update: 2024-06-01 00:00:00)
+Syncing: KAYNES (Last Update: 2024-06-01 00:00:00)
+Syncing: DMART (Last Update: 2024-06-01 00:00:00)
+Syncing: MANAPPURAM (Last Update: 2024-06-01 00:00:00)
+Syncing: ARMANFIN (Last Update: 2024-06-01 00:00:00)
+Syncing: AXISBANK (Last Update: 2024-06-01 00:00:00)
+Syncing: DBEIL (Last Update: 2024-06-01 00:00:00)
+Syncing: WAAREEENER (Last Update: 2024-06-01 00:00:00)
+Syncing: FMCGIETF (Last Update: 2024-06-01 00:00:00)
+Syncing: HINDUNILVR (Last Update: 2024-06-01 00:00:00)
+Syncing: VMM (Last Update: 2024-06-01 00:00:00)
+Syncing: IKS (Last Update: 2024-06-01 00:00:00)
+Syncing: IGIL (Last Update: 2024-06-01 00:00:00)
+Syncing: ITCHOTELS (Last Update: 2024-06-01 00:00:00)
+Syncing: KFINTECH (Last Update: 2024-06-01 00:00:00)
+Syncing: BANKBEES (Last Update: 2024-06-01 00:00:00)
+Syncing: CRISIL (Last Update: 2024-06-01 00:00:00)
+Syncing: AXISBANK (Last Update: 2024-06-01 00:00:00)
+Syncing: HDBFS (Last Update: 2024-06-01 00:00:00)
+Syncing: TMPV (Last Update: 2024-06-01 00:00:00)
+Syncing: TMCV (Last Update: 2024-06-01 00:00:00)
+Syncing: EBGNG (Last Update: 2024-06-01 00:00:00)
+Syncing: ABB (Last Update: 2024-06-01 00:00:00)
+Syncing: INFY (Last Update: 2024-06-01 00:00:00)
+Syncing: LGEINDIA (Last Update: 2024-06-01 00:00:00)
+Syncing: LENSKART (Last Update: 2024-06-01 00:00:00)
+Syncing: ABLBL (Last Update: 2024-06-01 00:00:00)
+Syncing: HDFCSML250 (Last Update: 2024-06-01 00:00:00)
+Syncing: CAMS (Last Update: 2024-06-01 00:00:00)
+Syncing: ^NSEI (Last Update: 2024-06-01 00:00:00)
+Syncing: ^NSEBANK (Last Update: 2024-06-01 00:00:00)
+Syncing: ANTHEM (Last Update: 2024-06-01 00:00:00)
+Syncing: INDOSTAR (Last Update: 2024-06-01 00:00:00)
+Syncing: CREDITACC (Last Update: 2024-06-01 00:00:00)
+Syncing: METROPOLIS (Last Update: 2024-06-01 00:00:00)
+Syncing: UJJIVANSFB (Last Update: 2024-06-01 00:00:00)
+Syncing: LTF (Last Update: 2024-06-01 00:00:00)
+Syncing: SBICARD (Last Update: 2024-06-01 00:00:00)
+Syncing: ADANIPOWER (Last Update: 2024-06-01 00:00:00)
+Syncing: BERGEPAINT (Last Update: 2024-06-01 00:00:00)
+Syncing: BSOFT (Last Update: 2024-06-01 00:00:00)
+Syncing: CEATLTD (Last Update: 2024-06-01 00:00:00)
+Syncing: CESC (Last Update: 2024-06-01 00:00:00)
+Syncing: CUMMINSIND (Last Update: 2024-06-01 00:00:00)
+Syncing: DCAL (Last Update: 2024-06-01 00:00:00)
+Syncing: DELTACORP (Last Update: 2024-06-01 00:00:00)
+ERROR:yfinance:$NSDL.BO.NS: possibly delisted; no timezone found
+ERROR:yfinance:$NDSL.NS: possibly delisted; no timezone found
+ERROR:yfinance:$BERGERPAINT.NS: possibly delisted; no timezone found
+ERROR:yfinance:$ZEE.NS: possibly delisted; no price data found  (1d 1927-09-27 -> 2026-09-02)
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:17:48] "POST /login HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:17:53] "GET /fetchDashboardOverview?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:18:33] "GET /fetchChartData?userId=Combined&selectedDate=2026-09-02 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:18:34] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:18:34] "GET /fetchPortfolio?userId=Combined&selectedDate=2026-09-02 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:18:36] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:18:37] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:19:12] "GET /fetchScripDividends?userId=Combined&symbol=NTPC HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:20:46] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:20:50] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:21:03] "GET /fetchDashboardOverview?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:21:11] "GET /fetchPortfolio?userId=Combined&selectedDate=2026-09-02 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:21:12] "GET /fetchChartData?userId=Combined&selectedDate=2026-09-02 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:21:13] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:21:14] "GET /fetchDashboardOverview?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:21:41] "GET /fetchAvailableStrategies HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:21:58] "GET /fetchStockAnalysis?stock=BEL HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:21:58] "GET /backtestStockStrategy?stock=BEL&strategy=sr_poc&years=2 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:22:09] "GET /backtestStockStrategy?stock=BEL&strategy=sr_poc&years=2 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:22:10] "GET /fetchDashboardOverview?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:22:14] "GET /fetchPortfolio?userId=Combined&selectedDate=2026-09-02 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:22:16] "GET /fetchChartData?userId=Combined&selectedDate=2026-09-02 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:22:16] "GET /fetchTotalDividends?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:22:31] "GET /fetchDashboardOverview?userId=Combined HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [02/Sep/2026 23:22:36] "GET /fetchDashboardOverview?userId=Combined HTTP/1.1" 200 -

@@ -7,10 +7,26 @@ const LandingPageUI = ({ handleLogout }) => {
   const rawUser = localStorage.getItem("username");
   const username = (rawUser && rawUser !== "null" && rawUser !== "undefined") ? rawUser : "User";
   
-  const [totalDividends, setTotalDividends] = useState(null);
-  const [portfolioMetrics, setPortfolioMetrics] = useState(null);
-  const [mfMetrics, setMfMetrics] = useState(null);
-  const [activeTab, setActiveTab] = useState("combined"); // 'combined' | 'equity' | 'mf'
+  const CACHE_KEY = `dashboard_overview_${username}`;
+  const cachedData = useMemo(() => {
+    try {
+      const saved = localStorage.getItem(CACHE_KEY);
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      // Invalidate old stale partial cache for Combined (under 15L)
+      if (username.toUpperCase() === 'COMBINED' && parsed?.equity?.current && parsed.equity.current < 1500000) {
+        localStorage.removeItem(CACHE_KEY);
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }, [CACHE_KEY, username]);
+
+  const [totalDividends, setTotalDividends] = useState(cachedData?.totalDividends ?? null);
+  const [portfolioMetrics, setPortfolioMetrics] = useState(cachedData?.equity ?? null);
+  const [mfMetrics, setMfMetrics] = useState(cachedData?.mutualFunds ?? null);
 
   // Time-based dynamic greeting
   const greeting = useMemo(() => {
@@ -42,11 +58,32 @@ const LandingPageUI = ({ handleLogout }) => {
 
   useEffect(() => {
     const fetchQuickMetrics = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const token = localStorage.getItem("token");
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-        // 1. Fetch dividends
+      // 1. Try fast dedicated overview endpoint first (returns in < 15ms)
+      try {
+        const res = await fetch(`/api/fetchDashboardOverview?userId=${encodeURIComponent(username)}`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.equity && data.mutualFunds) {
+            setPortfolioMetrics(data.equity);
+            setMfMetrics(data.mutualFunds);
+            setTotalDividends(data.totalDividends);
+            try {
+              localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+            } catch (e) {
+              console.error("Failed to save dashboard overview cache", e);
+            }
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("fetchDashboardOverview failed, falling back to individual endpoints:", e);
+      }
+
+      // Fallback: Individual endpoints if overview endpoint is unavailable
+      try {
         fetch(`/api/fetchTotalDividends?userId=${encodeURIComponent(username)}`, { headers })
           .then(res => res.ok ? res.json() : null)
           .then(divData => {
@@ -54,7 +91,6 @@ const LandingPageUI = ({ handleLogout }) => {
           })
           .catch(err => console.error("Error fetching dividends:", err));
 
-        // 2. Fetch Equity portfolio holdings
         fetch(`/api/fetchPortfolio?userId=${encodeURIComponent(username)}`, { headers })
           .then(res => res.ok ? res.json() : null)
           .then(portData => {
@@ -74,7 +110,6 @@ const LandingPageUI = ({ handleLogout }) => {
           })
           .catch(err => console.error("Error fetching equity portfolio:", err));
 
-        // 3. Fetch Mutual Funds data
         fetch(`/api/fetchMutualFundData?userId=${encodeURIComponent(username)}`, { headers })
           .then(res => res.ok ? res.json() : null)
           .then(mfData => {
@@ -89,12 +124,12 @@ const LandingPageUI = ({ handleLogout }) => {
           .catch(err => console.error("Error fetching mutual fund data:", err));
 
       } catch (err) {
-        console.error("Error fetching overview metrics:", err);
+        console.error("Error fetching overview metrics fallback:", err);
       }
     };
 
     fetchQuickMetrics();
-  }, [username]);
+  }, [username, CACHE_KEY]);
 
   const formatINR = (num) => Number(num || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
@@ -179,281 +214,111 @@ const LandingPageUI = ({ handleLogout }) => {
             <h2>{greeting}, <span className="welcome-name">{username}</span> 👋</h2>
             <p className="welcome-subtext">Track, Analyze, and Optimize your wealth.</p>
           </div>
-
-          <div className="quick-actions-bar">
-            <button className="quick-action-pill" onClick={() => navigate("/portfolio")}>
-              <span>📊</span> Equity
-            </button>
-            <button className="quick-action-pill" onClick={() => navigate("/mutualFunds")}>
-              <span>🏦</span> Mutual Funds
-            </button>
-            <button className="quick-action-pill" onClick={() => navigate("/reports")}>
-              <span>📑</span> Tax Reports
-            </button>
-          </div>
-        </div>
-
-        {/* Wealth Perspective Tabs */}
-        <div className="wealth-tab-container">
-          <div className="wealth-tabs-pill">
-            <button 
-              className={`wealth-tab-btn ${activeTab === 'combined' ? 'active' : ''}`}
-              onClick={() => setActiveTab('combined')}
-            >
-              <span>🌐</span> Total Wealth (Sum of Both)
-            </button>
-            <button 
-              className={`wealth-tab-btn ${activeTab === 'equity' ? 'active' : ''}`}
-              onClick={() => setActiveTab('equity')}
-            >
-              <span>📊</span> Equity
-            </button>
-            <button 
-              className={`wealth-tab-btn ${activeTab === 'mf' ? 'active' : ''}`}
-              onClick={() => setActiveTab('mf')}
-            >
-              <span>🏦</span> Mutual Funds
-            </button>
-          </div>
         </div>
 
         {/* Concise Metrics Strip */}
         <div className="metrics-strip">
-          {activeTab === 'combined' && (
-            <>
-              {/* Total Wealth Combined Card */}
-              <div className="metric-pill-card portfolio-stat-pill" onClick={() => navigate("/portfolio")}>
-                <div className="metric-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#6366f1' }}>💎</div>
-                <div className="metric-details">
-                  <div className="metric-header-inline">
-                    <span className="metric-label">Total Net Worth</span>
-                    {combinedMetrics && (
-                      <span className={`metric-profit-tag ${combinedMetrics.profit >= 0 ? 'pos' : 'neg'}`}>
-                        {combinedMetrics.profit >= 0 ? '▲ +' : '▼ -'}{Math.abs(combinedMetrics.profitPct).toFixed(2)}%
-                      </span>
-                    )}
-                  </div>
-                  <p className="metric-val">
-                    {combinedMetrics ? `₹${formatINR(combinedMetrics.current)}` : "Loading..."}
-                  </p>
-                  <div className="metric-sub-breakdown">
-                    <div className="sub-stat-row">
-                      <span className="sub-stat-label">Invested:</span>
-                      <span className="sub-stat-val">₹{combinedMetrics ? formatINR(combinedMetrics.invested) : "0"}</span>
-                    </div>
-                    <div className="sub-stat-row">
-                      <span className="sub-stat-label">Profit:</span>
-                      <span className={`sub-stat-val ${combinedMetrics?.profit >= 0 ? 'text-green' : 'text-red'}`}>
-                        {combinedMetrics?.profit >= 0 ? '+₹' : '-₹'}{combinedMetrics ? formatINR(Math.abs(combinedMetrics.profit)) : "0"}
-                      </span>
-                    </div>
-                  </div>
+          {/* Total Wealth Combined Card */}
+          <div className="metric-pill-card portfolio-stat-pill" onClick={() => navigate("/portfolio")}>
+            <div className="metric-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#6366f1' }}>💎</div>
+            <div className="metric-details">
+              <div className="metric-header-inline">
+                <span className="metric-label">Total Net Worth</span>
+                {combinedMetrics && (
+                  <span className={`metric-profit-tag ${combinedMetrics.profit >= 0 ? 'pos' : 'neg'}`}>
+                    {combinedMetrics.profit >= 0 ? '▲ +' : '▼ -'}{Math.abs(combinedMetrics.profitPct).toFixed(2)}%
+                  </span>
+                )}
+              </div>
+              <p className="metric-val">
+                {combinedMetrics ? `₹${formatINR(combinedMetrics.current)}` : "Loading..."}
+              </p>
+              <div className="metric-sub-breakdown">
+                <div className="sub-stat-row">
+                  <span className="sub-stat-label">Invested:</span>
+                  <span className="sub-stat-val">₹{combinedMetrics ? formatINR(combinedMetrics.invested) : "0"}</span>
+                </div>
+                <div className="sub-stat-row">
+                  <span className="sub-stat-label">Profit:</span>
+                  <span className={`sub-stat-val ${combinedMetrics?.profit >= 0 ? 'text-green' : 'text-red'}`}>
+                    {combinedMetrics?.profit >= 0 ? '+₹' : '-₹'}{combinedMetrics ? formatINR(Math.abs(combinedMetrics.profit)) : "0"}
+                  </span>
                 </div>
               </div>
+            </div>
+          </div>
 
-              {/* Equity Share Card */}
-              <div className="metric-pill-card portfolio-stat-pill" onClick={() => navigate("/portfolio")}>
-                <div className="metric-icon" style={{ background: 'rgba(99, 102, 241, 0.12)', color: '#6366f1' }}>💼</div>
-                <div className="metric-details">
-                  <div className="metric-header-inline">
-                    <span className="metric-label">Equity</span>
-                    {portfolioMetrics && (
-                      <span className={`metric-profit-tag ${portfolioMetrics.profit >= 0 ? 'pos' : 'neg'}`}>
-                        {portfolioMetrics.profit >= 0 ? '▲ +' : '▼ -'}{Math.abs(portfolioMetrics.profitPct).toFixed(2)}%
-                      </span>
-                    )}
-                  </div>
-                  <p className="metric-val">
-                    {portfolioMetrics ? `₹${formatINR(portfolioMetrics.current)}` : "Loading..."}
-                  </p>
-                  <div className="metric-sub-breakdown">
-                    <div className="sub-stat-row">
-                      <span className="sub-stat-label">Invested:</span>
-                      <span className="sub-stat-val">₹{portfolioMetrics ? formatINR(portfolioMetrics.invested) : "0"}</span>
-                    </div>
-                    <div className="sub-stat-row">
-                      <span className="sub-stat-label">Profit:</span>
-                      <span className={`sub-stat-val ${portfolioMetrics?.profit >= 0 ? 'text-green' : 'text-red'}`}>
-                        {portfolioMetrics?.profit >= 0 ? '+₹' : '-₹'}{portfolioMetrics ? formatINR(Math.abs(portfolioMetrics.profit)) : "0"}
-                      </span>
-                    </div>
-                  </div>
+          {/* Equity Share Card */}
+          <div className="metric-pill-card portfolio-stat-pill" onClick={() => navigate("/portfolio")}>
+            <div className="metric-icon" style={{ background: 'rgba(99, 102, 241, 0.12)', color: '#6366f1' }}>💼</div>
+            <div className="metric-details">
+              <div className="metric-header-inline">
+                <span className="metric-label">Equity</span>
+                {portfolioMetrics && (
+                  <span className={`metric-profit-tag ${portfolioMetrics.profit >= 0 ? 'pos' : 'neg'}`}>
+                    {portfolioMetrics.profit >= 0 ? '▲ +' : '▼ -'}{Math.abs(portfolioMetrics.profitPct).toFixed(2)}%
+                  </span>
+                )}
+              </div>
+              <p className="metric-val">
+                {portfolioMetrics ? `₹${formatINR(portfolioMetrics.current)}` : "Loading..."}
+              </p>
+              <div className="metric-sub-breakdown">
+                <div className="sub-stat-row">
+                  <span className="sub-stat-label">Invested:</span>
+                  <span className="sub-stat-val">₹{portfolioMetrics ? formatINR(portfolioMetrics.invested) : "0"}</span>
+                </div>
+                <div className="sub-stat-row">
+                  <span className="sub-stat-label">Profit:</span>
+                  <span className={`sub-stat-val ${portfolioMetrics?.profit >= 0 ? 'text-green' : 'text-red'}`}>
+                    {portfolioMetrics?.profit >= 0 ? '+₹' : '-₹'}{portfolioMetrics ? formatINR(Math.abs(portfolioMetrics.profit)) : "0"}
+                  </span>
                 </div>
               </div>
+            </div>
+          </div>
 
-              {/* Mutual Funds Share Card */}
-              <div className="metric-pill-card portfolio-stat-pill" onClick={() => navigate("/mutualFunds")}>
-                <div className="metric-icon" style={{ background: 'rgba(6, 182, 212, 0.12)', color: '#06b6d4' }}>🏦</div>
-                <div className="metric-details">
-                  <div className="metric-header-inline">
-                    <span className="metric-label">Mutual Funds</span>
-                    {mfMetrics && (
-                      <span className={`metric-profit-tag ${mfMetrics.profit >= 0 ? 'pos' : 'neg'}`}>
-                        {mfMetrics.profit >= 0 ? '▲ +' : '▼ -'}{Math.abs(mfMetrics.profitPct).toFixed(2)}%
-                      </span>
-                    )}
-                  </div>
-                  <p className="metric-val">
-                    {mfMetrics ? `₹${formatINR(mfMetrics.current)}` : "Loading..."}
-                  </p>
-                  <div className="metric-sub-breakdown">
-                    <div className="sub-stat-row">
-                      <span className="sub-stat-label">Invested:</span>
-                      <span className="sub-stat-val">₹{mfMetrics ? formatINR(mfMetrics.invested) : "0"}</span>
-                    </div>
-                    <div className="sub-stat-row">
-                      <span className="sub-stat-label">Profit:</span>
-                      <span className={`sub-stat-val ${mfMetrics?.profit >= 0 ? 'text-green' : 'text-red'}`}>
-                        {mfMetrics?.profit >= 0 ? '+₹' : '-₹'}{mfMetrics ? formatINR(Math.abs(mfMetrics.profit)) : "0"}
-                      </span>
-                    </div>
-                  </div>
+          {/* Mutual Funds Share Card */}
+          <div className="metric-pill-card portfolio-stat-pill" onClick={() => navigate("/mutualFunds")}>
+            <div className="metric-icon" style={{ background: 'rgba(6, 182, 212, 0.12)', color: '#06b6d4' }}>🏦</div>
+            <div className="metric-details">
+              <div className="metric-header-inline">
+                <span className="metric-label">Mutual Funds</span>
+                {mfMetrics && (
+                  <span className={`metric-profit-tag ${mfMetrics.profit >= 0 ? 'pos' : 'neg'}`}>
+                    {mfMetrics.profit >= 0 ? '▲ +' : '▼ -'}{Math.abs(mfMetrics.profitPct).toFixed(2)}%
+                  </span>
+                )}
+              </div>
+              <p className="metric-val">
+                {mfMetrics ? `₹${formatINR(mfMetrics.current)}` : "Loading..."}
+              </p>
+              <div className="metric-sub-breakdown">
+                <div className="sub-stat-row">
+                  <span className="sub-stat-label">Invested:</span>
+                  <span className="sub-stat-val">₹{mfMetrics ? formatINR(mfMetrics.invested) : "0"}</span>
+                </div>
+                <div className="sub-stat-row">
+                  <span className="sub-stat-label">Profit:</span>
+                  <span className={`sub-stat-val ${mfMetrics?.profit >= 0 ? 'text-green' : 'text-red'}`}>
+                    {mfMetrics?.profit >= 0 ? '+₹' : '-₹'}{mfMetrics ? formatINR(Math.abs(mfMetrics.profit)) : "0"}
+                  </span>
                 </div>
               </div>
+            </div>
+          </div>
 
-              {/* Total Dividends Card */}
-              <div className="metric-pill-card" onClick={() => navigate("/portfolio")}>
-                <div className="metric-icon" style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#10b981' }}>🎁</div>
-                <div className="metric-details">
-                  <span className="metric-label">Total Dividends</span>
-                  <p className="metric-val">
-                    {totalDividends !== null ? `₹${formatINR(totalDividends)}` : "₹0"}
-                  </p>
-                  <span className="metric-sub text-green">Passive Yield</span>
-                </div>
-              </div>
-            </>
-          )}
-
-          {activeTab === 'equity' && (
-            <>
-              {/* Equity Card */}
-              <div className="metric-pill-card portfolio-stat-pill" onClick={() => navigate("/portfolio")}>
-                <div className="metric-icon" style={{ background: 'rgba(99, 102, 241, 0.12)', color: '#6366f1' }}>💼</div>
-                <div className="metric-details">
-                  <div className="metric-header-inline">
-                    <span className="metric-label">Equity Portfolio</span>
-                    {portfolioMetrics && (
-                      <span className={`metric-profit-tag ${portfolioMetrics.profit >= 0 ? 'pos' : 'neg'}`}>
-                        {portfolioMetrics.profit >= 0 ? '▲ +' : '▼ -'}{Math.abs(portfolioMetrics.profitPct).toFixed(2)}%
-                      </span>
-                    )}
-                  </div>
-                  <p className="metric-val">
-                    {portfolioMetrics ? `₹${formatINR(portfolioMetrics.current)}` : "Loading..."}
-                  </p>
-                  <div className="metric-sub-breakdown">
-                    <div className="sub-stat-row">
-                      <span className="sub-stat-label">Invested:</span>
-                      <span className="sub-stat-val">₹{portfolioMetrics ? formatINR(portfolioMetrics.invested) : "0"}</span>
-                    </div>
-                    <div className="sub-stat-row">
-                      <span className="sub-stat-label">Profit:</span>
-                      <span className={`sub-stat-val ${portfolioMetrics?.profit >= 0 ? 'text-green' : 'text-red'}`}>
-                        {portfolioMetrics?.profit >= 0 ? '+₹' : '-₹'}{portfolioMetrics ? formatINR(Math.abs(portfolioMetrics.profit)) : "0"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Total Dividends */}
-              <div className="metric-pill-card" onClick={() => navigate("/portfolio")}>
-                <div className="metric-icon" style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#10b981' }}>🎁</div>
-                <div className="metric-details">
-                  <span className="metric-label">Total Dividends</span>
-                  <p className="metric-val">
-                    {totalDividends !== null ? `₹${formatINR(totalDividends)}` : "₹0"}
-                  </p>
-                  <span className="metric-sub text-green">Passive Yield</span>
-                </div>
-              </div>
-
-              {/* Heatmap */}
-              <div className="metric-pill-card" onClick={() => navigate("/heatmap")}>
-                <div className="metric-icon" style={{ background: 'rgba(249, 115, 22, 0.12)', color: '#f97316' }}>🔥</div>
-                <div className="metric-details">
-                  <span className="metric-label">Market Heatmap</span>
-                  <p className="metric-val">Sector Pulse</p>
-                  <span className="metric-sub">Explore Weights &rarr;</span>
-                </div>
-              </div>
-
-              {/* Capital Gains */}
-              <div className="metric-pill-card" onClick={() => navigate("/reports")}>
-                <div className="metric-icon" style={{ background: 'rgba(236, 72, 153, 0.12)', color: '#ec4899' }}>📜</div>
-                <div className="metric-details">
-                  <span className="metric-label">Capital Gains</span>
-                  <p className="metric-val">STCG & LTCG</p>
-                  <span className="metric-sub">Tax Statements &rarr;</span>
-                </div>
-              </div>
-            </>
-          )}
-
-          {activeTab === 'mf' && (
-            <>
-              {/* Mutual Funds Card */}
-              <div className="metric-pill-card portfolio-stat-pill" onClick={() => navigate("/mutualFunds")}>
-                <div className="metric-icon" style={{ background: 'rgba(6, 182, 212, 0.12)', color: '#06b6d4' }}>🏦</div>
-                <div className="metric-details">
-                  <div className="metric-header-inline">
-                    <span className="metric-label">Mutual Funds</span>
-                    {mfMetrics && (
-                      <span className={`metric-profit-tag ${mfMetrics.profit >= 0 ? 'pos' : 'neg'}`}>
-                        {mfMetrics.profit >= 0 ? '▲ +' : '▼ -'}{Math.abs(mfMetrics.profitPct).toFixed(2)}%
-                      </span>
-                    )}
-                  </div>
-                  <p className="metric-val">
-                    {mfMetrics ? `₹${formatINR(mfMetrics.current)}` : "Loading..."}
-                  </p>
-                  <div className="metric-sub-breakdown">
-                    <div className="sub-stat-row">
-                      <span className="sub-stat-label">Invested:</span>
-                      <span className="sub-stat-val">₹{mfMetrics ? formatINR(mfMetrics.invested) : "0"}</span>
-                    </div>
-                    <div className="sub-stat-row">
-                      <span className="sub-stat-label">Profit:</span>
-                      <span className={`sub-stat-val ${mfMetrics?.profit >= 0 ? 'text-green' : 'text-red'}`}>
-                        {mfMetrics?.profit >= 0 ? '+₹' : '-₹'}{mfMetrics ? formatINR(Math.abs(mfMetrics.profit)) : "0"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* SIP Tracker */}
-              <div className="metric-pill-card" onClick={() => navigate("/mutualFunds")}>
-                <div className="metric-icon" style={{ background: 'rgba(6, 182, 212, 0.12)', color: '#06b6d4' }}>📈</div>
-                <div className="metric-details">
-                  <span className="metric-label">SIP Analytics</span>
-                  <p className="metric-val">NAV Growth</p>
-                  <span className="metric-sub text-green">Active Milestones</span>
-                </div>
-              </div>
-
-              {/* Fund Distribution */}
-              <div className="metric-pill-card" onClick={() => navigate("/mutualFunds")}>
-                <div className="metric-icon" style={{ background: 'rgba(99, 102, 241, 0.12)', color: '#6366f1' }}>⚖️</div>
-                <div className="metric-details">
-                  <span className="metric-label">Asset Allocation</span>
-                  <p className="metric-val">Fund Breakdown</p>
-                  <span className="metric-sub">View Details &rarr;</span>
-                </div>
-              </div>
-
-              {/* Capital Gains */}
-              <div className="metric-pill-card" onClick={() => navigate("/reports")}>
-                <div className="metric-icon" style={{ background: 'rgba(236, 72, 153, 0.12)', color: '#ec4899' }}>📜</div>
-                <div className="metric-details">
-                  <span className="metric-label">Capital Gains</span>
-                  <p className="metric-val">STCG & LTCG</p>
-                  <span className="metric-sub">Tax Statements &rarr;</span>
-                </div>
-              </div>
-            </>
-          )}
+          {/* Total Dividends Card */}
+          <div className="metric-pill-card portfolio-stat-pill" onClick={() => navigate("/portfolio?tab=dividends")}>
+            <div className="metric-icon" style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#10b981' }}>🎁</div>
+            <div className="metric-details">
+              <span className="metric-label">Total Dividends</span>
+              <p className="metric-val">
+                {totalDividends !== null ? `₹${formatINR(totalDividends)}` : "₹0"}
+              </p>
+              <span className="metric-sub text-green">Passive Yield</span>
+            </div>
+          </div>
         </div>
 
         {/* Clean Module Cards */}
